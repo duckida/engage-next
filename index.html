@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#f7f6fb" />
+    <meta name="description" content="A calm, unofficial client for the Holme Grange Engage pupil portal." />
+    <link rel="icon" type="image/png" href="/crest.png" />
+    <title>Engage Next</title>
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem("engage-next-theme");
+          var mode = stored === "light" || stored === "dark" ? stored : null;
+          if (!mode) {
+            mode = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+          }
+          document.documentElement.dataset.theme = mode;
+          document.documentElement.style.colorScheme = mode;
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute("content", mode === "dark" ? "#101216" : "#f8f7fc");
+        } catch (e) {
+          /* keep default light theme */
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
