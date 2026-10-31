@@ -1624,6 +1624,11 @@ html[data-theme="dark"] .lesson-card-time strong {
   align-items: center;
   gap: 4px;
   min-width: 0;
+  white-space: nowrap;
+}
+
+.lesson-card-meta > span svg {
+  flex: none;
 }
 
 .lesson-card-meta .pill {

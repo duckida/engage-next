@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Download, FileText, GraduationCap, ExternalLink } from "lucide-react";
 import { api } from "../lib/api";
 import { ErrorState, PageSkeleton, EmptyState } from "../components/States";
-import { formatShortDate, relativeDate } from "../lib/format";
+import { formatLongDate, relativeDate } from "../lib/format";
 import type { Report } from "@shared/types";
 
 function groupReports(reports: Report[]): Array<{ year: string; items: Report[] }> {
@@ -80,8 +80,10 @@ export function ReportsPage() {
                   <div className="report-body">
                     <strong>{report.title}</strong>
                     <span>
-                      Added {formatShortDate(report.createdDate)} ·{" "}
-                      <time dateTime={report.createdDate}>{relativeDate(report.createdDate)}</time>
+                      Added{" "}
+                      <time dateTime={report.createdDate} title={formatLongDate(report.createdDate)}>
+                        {relativeDate(report.createdDate)}
+                      </time>
                     </span>
                   </div>
                   <div className="report-actions">

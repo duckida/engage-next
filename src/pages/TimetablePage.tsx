@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, CalendarDays, MapPin, Users } from "lucide-react";
 import { api } from "../lib/api";
 import { ErrorState, PageSkeleton, EmptyState, Skeleton } from "../components/States";
 import { dayNumber, formatLongDate, weekdayShort, durationLabel } from "../lib/format";
 import { subjectStyle, subjectAbbreviation } from "../lib/subjects";
-import type { DashboardPayload, Timetable, TimetableDay, TimetableLesson } from "@shared/types";
+import type { Timetable, TimetableDay, TimetableLesson } from "@shared/types";
 
 function addDays(iso: string, days: number): string {
   const date = new Date(`${iso}T00:00:00Z`);
@@ -97,7 +97,6 @@ function DayColumn({
 export function TimetablePage() {
   const [week, setWeek] = useState<string | null>(null);
   const [selectedDay, setSelectedDay] = useState(0);
-  const queryClient = useQueryClient();
 
   const query = useQuery({
     queryKey: ["timetable", week ?? "current"],
@@ -108,8 +107,8 @@ export function TimetablePage() {
   const base = data?.weekBeginning ?? "2026-11-02";
 
   // Follow the dashboard clock (fixed in demo mode) so “today” matches the rest of the app.
-  const dashboard = queryClient.getQueryData<DashboardPayload>(["dashboard"]);
-  const todayIso = dashboard?.nowIso.slice(0, 10) ?? new Date().toISOString().slice(0, 10);
+  const dashboard = useQuery({ queryKey: ["dashboard"], queryFn: () => api.dashboard(), staleTime: 30_000 });
+  const todayIso = dashboard.data?.nowIso.slice(0, 10) ?? new Date().toISOString().slice(0, 10);
 
   useEffect(() => {
     if (!data || week !== null) return;
