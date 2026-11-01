@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, CalendarDays, MapPin, Users } from "lucide-react";
+import { ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
 import { api } from "../lib/api";
 import { ErrorState, PageSkeleton, EmptyState, Skeleton } from "../components/States";
-import { dayNumber, formatLongDate, weekdayShort, durationLabel } from "../lib/format";
-import { subjectStyle, subjectAbbreviation } from "../lib/subjects";
+import { dayNumber, formatLongDate, weekdayShort } from "../lib/format";
+import { subjectStyle } from "../lib/subjects";
 import type { Timetable, TimetableDay, TimetableLesson } from "@shared/types";
 
 function addDays(iso: string, days: number): string {
@@ -31,6 +31,17 @@ function clampDayIndex(days: TimetableDay[], index: number): number {
   return Math.max(0, Math.min(index, days.length - 1));
 }
 
+function isWeekday(day: TimetableDay): boolean {
+  const date = new Date(`${day.date}T00:00:00Z`);
+  const weekday = date.getUTCDay();
+  return weekday >= 1 && weekday <= 5;
+}
+
+function timeRange(lesson: TimetableLesson): string {
+  if (lesson.start && lesson.end) return `${lesson.start}–${lesson.end}`;
+  return lesson.start || lesson.end || "All day";
+}
+
 function LessonCard({ lesson }: { lesson: TimetableLesson }) {
   const isBreak = lesson.kind !== "lesson";
   return (
@@ -38,30 +49,18 @@ function LessonCard({ lesson }: { lesson: TimetableLesson }) {
       className={`lesson-card ${isBreak ? "is-break" : ""}`}
       style={subjectStyle(lesson.subject)}
     >
-      <div className="lesson-card-time">
-        <strong>{lesson.start}</strong>
-        <span>{lesson.end}</span>
-        <em>{durationLabel(lesson.start, lesson.end)}</em>
-      </div>
       <div className="lesson-card-body">
+        <time className="lesson-card-time">{timeRange(lesson)}</time>
         <span className="lesson-card-subject">{lesson.subject}</span>
         <span className="lesson-card-meta">
-          {lesson.period ? <span className="pill">{lesson.period}</span> : null}
-          {lesson.room ? (
-            <span>
-              <MapPin size={13} /> {lesson.room}
-            </span>
-          ) : null}
           {lesson.teachers.length ? (
-            <span>
-              <Users size={13} /> {lesson.teachers.join(", ")}
-            </span>
+            <span className="lesson-card-teacher">{lesson.teachers.join(", ")}</span>
+          ) : null}
+          {lesson.room ? (
+            <span className="lesson-card-room">{lesson.room}</span>
           ) : null}
         </span>
       </div>
-      <span className="lesson-card-mark" aria-hidden="true">
-        {subjectAbbreviation(lesson.subject)}
-      </span>
     </li>
   );
 }
@@ -122,12 +121,13 @@ export function TimetablePage() {
   });
 
   const data: Timetable | undefined = query.data;
+  const visibleDays = useMemo(() => data?.days.filter(isWeekday) ?? [], [data]);
   const isEmptyWeek =
     !!data &&
-    data.days.every((d) => d.lessons.filter((l) => l.kind === "lesson").length === 0);
+    visibleDays.every((d) => d.lessons.filter((l) => l.kind === "lesson").length === 0);
   const holidayNote =
-    data?.days.map((d) => d.note).find((n) => !!n) ??
-    data?.days.flatMap((d) => d.lessons).find((l) => l.kind === "event")?.subject ??
+    visibleDays.map((d) => d.note).find((n) => !!n) ??
+    visibleDays.flatMap((d) => d.lessons).find((l) => l.kind === "event")?.subject ??
     null;
 
   // Navigate from the last known week, or the week we asked for, or this week.
@@ -136,7 +136,7 @@ export function TimetablePage() {
   const base = data?.weekBeginning ?? requestedWeek;
 
   const moveDay = (direction: -1 | 1) => {
-    if (!data?.days.length) {
+    if (!visibleDays.length) {
       setRequestedWeek(addDays(base, direction * 7));
       setWeek(addDays(base, direction * 7));
       setSelectedDay(direction > 0 ? 0 : Number.MAX_SAFE_INTEGER);
@@ -144,12 +144,12 @@ export function TimetablePage() {
     }
 
     const nextIndex = selectedDay + direction;
-    if (nextIndex >= 0 && nextIndex < data.days.length) {
+    if (nextIndex >= 0 && nextIndex < visibleDays.length) {
       setSelectedDay(nextIndex);
       return;
     }
 
-    const nextWeek = addDays(data.weekBeginning, direction * 7);
+    const nextWeek = addDays(data?.weekBeginning ?? base, direction * 7);
     setRequestedWeek(nextWeek);
     setWeek(nextWeek);
     setSelectedDay(direction > 0 ? 0 : Number.MAX_SAFE_INTEGER);
@@ -161,20 +161,20 @@ export function TimetablePage() {
 
   useEffect(() => {
     if (!data || week !== null) return;
-    const index = data.days.findIndex((day) => day.date === todayIso);
+    const index = visibleDays.findIndex((day) => day.date === todayIso);
     if (index >= 0) setSelectedDay(index);
-  }, [data, week, todayIso]);
+  }, [data, visibleDays, week, todayIso]);
 
   useEffect(() => {
     if (!data) return;
-    setSelectedDay((index) => clampDayIndex(data.days, index));
-  }, [data]);
+    setSelectedDay((index) => clampDayIndex(visibleDays, index));
+  }, [data, visibleDays]);
 
   const goToday = () => {
     const thisWeek = mondayOfIso(todayIso);
     setRequestedWeek(thisWeek);
     setWeek(null);
-    const index = data?.weekBeginning === thisWeek ? data.days.findIndex((day) => day.date === todayIso) : -1;
+    const index = data?.weekBeginning === thisWeek ? visibleDays.findIndex((day) => day.date === todayIso) : -1;
     setSelectedDay(index >= 0 ? index : 0);
   };
 
@@ -228,10 +228,10 @@ export function TimetablePage() {
         </div>
       ) : query.error ? (
         <ErrorState error={query.error} onRetry={() => void query.refetch()} />
-      ) : data && data.days.length ? (
+      ) : data && visibleDays.length ? (
         <>
           <div className="day-tabs" role="tablist" aria-label="Days">
-            {data.days.map((day, index) => (
+            {visibleDays.map((day, index) => (
               <button
                 key={day.date}
                 type="button"
@@ -263,7 +263,7 @@ export function TimetablePage() {
             </div>
           ) : (
             <div className="day-grid">
-              {data.days.map((day, index) => (
+              {visibleDays.map((day, index) => (
                 <div key={day.date} className={`day-slot ${selectedDay === index ? "is-open" : ""}`}>
                   <DayColumn
                     day={day}

@@ -1471,7 +1471,7 @@ input {
 .day-grid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  gap: 12px;
+  gap: 14px;
   align-items: start;
 }
 
@@ -1587,16 +1587,16 @@ input {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .lesson-card {
-  display: flex;
-  gap: 10px;
-  padding: 11px 12px;
+  display: block;
+  padding: 13px 14px;
   border-radius: var(--r-md);
   background: color-mix(in srgb, hsl(var(--h) var(--s) 62%) 12%, var(--surface));
   border: 1px solid color-mix(in srgb, hsl(var(--h) var(--s) 55%) 22%, transparent);
+  overflow: hidden;
 }
 
 .lesson-card.is-break {
@@ -1605,82 +1605,49 @@ input {
 }
 
 .lesson-card-time {
-  display: flex;
-  flex-direction: column;
-  line-height: 1.3;
+  display: block;
+  margin-bottom: 5px;
+  line-height: 1.2;
   font-variant-numeric: tabular-nums;
-  flex: none;
-}
-
-.lesson-card-time strong {
-  font-size: 0.88rem;
+  font-size: 0.82rem;
   font-weight: 700;
   color: hsl(var(--h) 40% 32%);
 }
 
-html[data-theme="dark"] .lesson-card-time strong {
+html[data-theme="dark"] .lesson-card-time {
   color: hsl(var(--h) 45% 78%);
-}
-
-.lesson-card-time span {
-  font-size: 0.74rem;
-  color: var(--on-bg-faint);
-}
-
-.lesson-card-time em {
-  font-style: normal;
-  font-size: 0.68rem;
-  color: var(--on-bg-faint);
 }
 
 .lesson-card-body {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
   min-width: 0;
   flex: 1;
 }
 
 .lesson-card-subject {
-  font-weight: 680;
-  font-size: 0.9rem;
-  line-height: 1.25;
+  display: block;
+  font-weight: 740;
+  font-size: 1rem;
+  line-height: 1.2;
+  color: var(--on-bg);
 }
 
 .lesson-card-meta {
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px 10px;
-  font-size: 0.74rem;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 6px;
+  font-size: 0.78rem;
+  line-height: 1.25;
   color: var(--on-bg-muted);
 }
 
 .lesson-card-meta > span {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+  display: block;
   min-width: 0;
-  white-space: nowrap;
-}
-
-.lesson-card-meta > span svg {
-  flex: none;
-}
-
-.lesson-card-meta .pill {
-  font-size: 0.66rem;
-  padding: 1px 8px;
-}
-
-.lesson-card-mark {
-  align-self: flex-start;
-  font-size: 0.66rem;
-  font-weight: 750;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: hsl(var(--h) 35% 45%);
-  opacity: 0.7;
-  flex: none;
+  overflow-wrap: anywhere;
 }
 
 /* ---------- Merits ---------- */
