@@ -53,6 +53,37 @@ Browser ──/api──▶ local server (127.0.0.1:8787) ──▶ <school>.eng
   and notices use the portal's own JSON endpoints.
 - Responses are cached briefly per session to avoid hammering the school server.
 
+## Deploying to Vercel
+
+Both the frontend and the API deploy together on the free Hobby plan.
+
+1. Push this repo to GitHub and import it in Vercel.
+2. In **Settings → Environment Variables**, add:
+
+   | Name | Value |
+   | --- | --- |
+   | `SESSION_SECRET` | a long random string — `openssl rand -hex 32` |
+
+   Changing this value signs everyone out.
+3. Deploy. `vercel.json` builds the Vite app into `dist/` and routes `/api/*`
+   to `api/index.ts`.
+
+### Why sessions work without a database
+
+Vercel functions keep no memory between requests, so the server cannot hold a
+session Map. Instead the portal's own cookies are sealed into the visitor's
+`en_sid` cookie with **AES-256-GCM**, keyed by `SESSION_SECRET`:
+
+- Nothing is stored server-side; any instance can serve any request.
+- The cookie is `httpOnly`, `SameSite=Lax` and `Secure` in production.
+- Tampering fails the GCM tag and the session is discarded.
+- Sessions expire after 12 hours, enforced server-side.
+
+The **password is never part of the cookie.** It is used once to log in to the
+school portal, then discarded. When the school's own session expires, you sign
+in again — the app cannot silently re-authenticate, because that would mean
+storing the password.
+
 ## Scripts
 
 | Command | Purpose |

@@ -1,8 +1,21 @@
 import express from "express";
 import fs from "node:fs";
 import path from "node:path";
+import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { app, demoMode } from "./app.ts";
+
+// Local development convenience: without a secret, sessions cannot be sealed.
+// A random per-process secret is fine locally (restart = sign in again); on
+// Vercel SESSION_SECRET must be set explicitly so sessions survive restarts.
+if (!process.env.SESSION_SECRET) {
+  if (process.env.VERCEL) {
+    throw new Error("SESSION_SECRET must be set in the Vercel project environment.");
+  }
+  process.env.SESSION_SECRET = crypto.randomBytes(32).toString("hex");
+  console.log("[engage-next] no SESSION_SECRET set — generated a temporary one for this run.");
+}
+
+const { app, demoMode } = await import("./app.ts");
 
 const port = Number(process.env.PORT ?? 8787);
 const host = process.env.HOST ?? "127.0.0.1";

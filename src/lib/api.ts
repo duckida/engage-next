@@ -58,11 +58,12 @@ async function request<T>(path: string, init: RequestInit = {}, options: Request
       /* keep the generic message */
     }
 
-    // A non-JSON 404 means the API isn't mounted here at all (static host).
-    if (response.status === 404 && code === "unknown") {
+    // A static host answers /api/* with its SPA fallback (HTML, 200) or a 404.
+    // Either way there is no API behind this build.
+    if (code === "unknown" && (response.status === 404 || response.status === 200)) {
       throw new ApiError(
         "no_api",
-        "This build has no local server behind it. Run the app with npm run dev on your own computer.",
+        "This build is the frontend only — no server is answering /api.",
         404,
       );
     }
@@ -72,7 +73,17 @@ async function request<T>(path: string, init: RequestInit = {}, options: Request
   }
 
   if (response.status === 204) return undefined as T;
-  return (await response.json()) as T;
+
+  try {
+    return (await response.json()) as T;
+  } catch {
+    // HTML where JSON was expected: again, a static fallback, not our API.
+    throw new ApiError(
+      "no_api",
+      "This build is the frontend only — no server is answering /api.",
+      404,
+    );
+  }
 }
 
 export const api = {
