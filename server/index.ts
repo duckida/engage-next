@@ -163,6 +163,17 @@ app.post("/api/logout", (req, res) => {
   res.json({ ok: true });
 });
 
+// /api/me is the session probe: it answers 200 with `user: null` when logged
+// out, so the client can render the login screen without a 401 round-trip.
+app.get("/api/me", (req, res) => {
+  const session = sessionFor(req as AuthedRequest);
+  if (!session) {
+    res.json({ user: null, demo: demoMode });
+    return;
+  }
+  res.json({ user: session.backend.getUser(), demo: session.demo });
+});
+
 app.use("/api", (req, res, next) => {
   const session = sessionFor(req as AuthedRequest);
   if (!session) {
@@ -172,14 +183,6 @@ app.use("/api", (req, res, next) => {
   (req as AuthedRequest).session = session;
   next();
 });
-
-app.get(
-  "/api/me",
-  asyncHandler(async (req, res) => {
-    const session = req.session!;
-    res.json({ user: session.backend.getUser(), demo: session.demo });
-  }),
-);
 
 app.get(
   "/api/dashboard",

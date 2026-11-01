@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { AppShell } from "./components/AppShell";
 import { Splash } from "./components/States";
@@ -14,18 +15,21 @@ import { TimetablePage } from "./pages/TimetablePage";
 export function App() {
   const me = useMe();
   const location = useLocation();
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     const onUnauthorized = () => {
-      window.location.assign("/");
+      // Drop the session state so the login screen renders — no reload needed.
+      queryClient.setQueryData(["me"], null);
+      queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== "me" });
     };
     window.addEventListener("engage:unauthorized", onUnauthorized);
     return () => window.removeEventListener("engage:unauthorized", onUnauthorized);
-  }, []);
+  }, [queryClient]);
 
   if (me.isPending) return <Splash />;
 
-  if (me.isError || !me.data) {
+  if (me.isError || !me.data?.user) {
     return (
       <Routes>
         <Route path="*" element={<LoginPage />} />

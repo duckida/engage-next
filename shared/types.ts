@@ -100,7 +100,8 @@ export type DashboardPayload = {
 };
 
 export type MePayload = {
-  user: SessionUser;
+  /** null when there is no active session (logged out). */
+  user: SessionUser | null;
   demo: boolean;
 };
 

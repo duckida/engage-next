@@ -57,7 +57,8 @@ async function request<T>(path: string, init: RequestInit = {}, options: Request
 }
 
 export const api = {
-  me: () => request<MePayload>("/me"),
+  // No auth event here: a 401 from /me is how we learn we're logged out.
+  me: () => request<MePayload>("/me", {}, { authEvent: false }),
   login: (username: string, password: string) =>
     request<MePayload>(
       "/login",
