@@ -114,3 +114,20 @@ storing the password.
   personal-use client for your own data rather than a public service.
 - The app deliberately ships no school branding: the school's name comes from
   the address you enter.
+
+### What is stored on your device
+
+| Item | Where | Why |
+| --- | --- | --- |
+| School address | `localStorage` | So you don't retype it |
+| Username | `localStorage` | So you don't retype it |
+| Session | httpOnly cookie (encrypted) | Keeps you signed in |
+| Theme | `localStorage` | Light/dark preference |
+
+**Your password is never stored.** It is used once to sign in and then
+discarded. The login form uses `autocomplete="username"` and
+`autocomplete="current-password"`, so your browser's own password manager can
+fill it — that is the safe way to avoid retyping it.
+
+Use *Forget this school and username* on the sign-in screen to clear the
+remembered details on a shared device.

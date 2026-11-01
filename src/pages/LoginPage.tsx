@@ -3,20 +3,24 @@ import { ArrowLeft, ArrowRight, Eye, EyeOff, Loader2, LockKeyhole, School } from
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "../lib/api";
 import { AppMark } from "../components/AppMark";
+import { remembered } from "../lib/remember";
 type Step = "school" | "account";
 
 export function LoginPage({ demo = false }: { demo?: boolean }) {
   const queryClient = useQueryClient();
-  const [step, setStep] = useState<Step>("school");
-  const [school, setSchool] = useState("");
-  const [username, setUsername] = useState("");
+  const [step, setStep] = useState<Step>(() => (remembered.school() ? "account" : "school"));
+  const [school, setSchool] = useState(() => remembered.school());
+  const [username, setUsername] = useState(() => remembered.username());
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
   const login = useMutation({
     mutationFn: (input: { school: string; username: string; password: string }) =>
       api.login(input.school, input.username, input.password),
-    onSuccess: (data) => {
+    onSuccess: (data, input) => {
+      // Only remember details after a successful sign-in.
+      remembered.setSchool(input.school);
+      remembered.setUsername(input.username);
       queryClient.setQueryData(["me"], data);
       queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== "me" });
     },
@@ -131,8 +135,13 @@ export function LoginPage({ demo = false }: { demo?: boolean }) {
                 <span>
                   <strong>{school}</strong>.engagehosted.com
                 </span>
-                <ArrowLeft size={14} className="login-school-back" />
+                <span className="login-school-change">Change</span>
               </button>
+
+              <p className="login-remember">
+                Your school and username are remembered on this device. Your password is not
+                stored — let your browser’s password manager fill it.
+              </p>
 
               {demo ? (
                 <div className="demo-notice">
@@ -198,6 +207,21 @@ export function LoginPage({ demo = false }: { demo?: boolean }) {
                   {login.isPending ? "Signing in…" : "Sign in"}
                 </button>
               </form>
+
+              <button
+                type="button"
+                className="login-forget"
+                onClick={() => {
+                  remembered.forget();
+                  setSchool("");
+                  setUsername("");
+                  setPassword("");
+                  login.reset();
+                  setStep("school");
+                }}
+              >
+                Forget this school and username
+              </button>
             </>
           )}
         </div>
