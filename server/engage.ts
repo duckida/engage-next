@@ -270,14 +270,13 @@ export class EngageClient {
   private jar = new CookieJar();
   private formPage: string | null = null;
   private pupilId: string | null = null;
+  private credentials?: { username: string; password: string };
   user: SessionUser | null = null;
   readonly base: string;
 
-  constructor(
-    school: string,
-    private credentials?: { username: string; password: string },
-  ) {
+  constructor(school: string, credentials?: { username: string; password: string }) {
     this.base = schoolBaseUrl(school);
+    this.credentials = credentials;
   }
 
   getUser(): SessionUser {

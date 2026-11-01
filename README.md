@@ -68,6 +68,18 @@ Both the frontend and the API deploy together on the free Hobby plan.
 3. Deploy. `vercel.json` builds the Vite app into `dist/` and routes `/api/*`
    to `api/index.ts`.
 
+### Build output
+
+`npm run build` does two things:
+
+1. `scripts/build-api.mjs` bundles `server/vercel.ts` into `api/index.js`
+2. `vite build` writes the frontend into `dist/`
+
+Vercel deploys `api/index.js` as the function. The bundle is generated, not
+committed, so it can never drift from the TypeScript source. Bundling also means
+the function runs plain JavaScript — it does not depend on Node's TypeScript
+stripping, which cannot handle parameter properties, enums or namespaces.
+
 ### Why sessions work without a database
 
 Vercel functions keep no memory between requests, so the server cannot hold a

@@ -355,7 +355,8 @@ app.get(
   }),
 );
 
-app.use((req, res) => {
+// Only claim unknown /api routes; anything else belongs to the static app.
+app.use("/api", (req, res) => {
   res.status(404).json({ error: { code: "not_found", message: "Unknown API route." } });
 });
 
