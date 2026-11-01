@@ -45,6 +45,7 @@ function parseFormFields(html) {
   return fields;
 }
 var DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+var PORTAL_TIMEOUT_MS = 12e3;
 var MONTHS = [
   "january",
   "february",
@@ -265,7 +266,13 @@ var EngageClient = class _EngageClient {
     }
     if (!headers.has("accept")) headers.set("accept", "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8");
     if (!headers.has("accept-language")) headers.set("accept-language", "en-GB,en;q=0.9");
-    const res = await fetch(url, { ...init, headers, redirect: "manual" });
+    const res = await fetch(url, {
+      ...init,
+      headers,
+      redirect: "manual",
+      // A hung portal must not hang the request forever.
+      signal: AbortSignal.timeout(PORTAL_TIMEOUT_MS)
+    });
     this.storeCookies(res, url);
     const location = res.headers.get("location");
     if (res.status >= 300 && res.status < 400 && location) {
@@ -573,7 +580,8 @@ var EngageClient = class _EngageClient {
           "accept-language": "en-GB,en;q=0.9",
           referer: `${this.base}/VLE/`
         },
-        redirect: "manual"
+        redirect: "manual",
+        signal: AbortSignal.timeout(PORTAL_TIMEOUT_MS)
       });
       const location = res.headers.get("location");
       if (res.status >= 300 && res.status < 400 && location) {
@@ -1429,6 +1437,40 @@ app.get(
   })
 );
 app.get(
+  "/api/timetable/debug",
+  asyncHandler(async (req, res) => {
+    const session = req.session;
+    if (session.demo) {
+      res.json({ demo: true, note: "Demo mode \u2014 no portal request was made." });
+      return;
+    }
+    const requested = dateParam(req.query.week);
+    const base = /* @__PURE__ */ new Date();
+    const week = requested ? mondayOf(requested) : mondayOf(londonParts(base).date);
+    const client = session.backend;
+    const out = { week, base: client.base };
+    try {
+      const page = await client.getPage("/VLE/WeeklyTimetable.aspx");
+      out.pageStatus = page.status;
+      out.pageUrl = page.url;
+      out.pageBytes = page.text.length;
+      const cheerio2 = await import("cheerio");
+      const $ = cheerio2.load(page.text);
+      out.weekLabel = $("[id$='lblWeek']").first().text().trim();
+      const table = $("table[id^='tblTimeTable']").first();
+      out.tablesFound = $("table").length;
+      out.timetableTableFound = table.length > 0;
+      out.rows = table.find("tr").length;
+      out.lessonTextCells = table.find(".ttLessonText").length;
+      out.firstCells = table.find("tr").slice(0, 4).map((_, r) => $(r).children("td, th").first().text().replace(/\s+/g, " ").trim()).get();
+      out.snippet = page.text.replace(/\s+/g, " ").slice(0, 400);
+    } catch (error) {
+      out.error = error instanceof Error ? error.message : String(error);
+    }
+    res.json(out);
+  })
+);
+app.get(
   "/api/points",
   asyncHandler(async (req, res) => {
     const session = req.session;
@@ -1568,6 +1610,16 @@ app.use((error, req, res, next) => {
       error: {
         code: "school_not_found",
         message: "No Engage portal found at that address. Check your school's address and try again."
+      }
+    });
+    return;
+  }
+  const errorName = error?.name;
+  if (errorName === "TimeoutError" || errorName === "AbortError") {
+    res.status(504).json({
+      error: {
+        code: "timeout",
+        message: "Your school's portal took too long to respond. Please try again."
       }
     });
     return;

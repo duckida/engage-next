@@ -9,8 +9,17 @@ import type { Timetable, TimetableDay, TimetableLesson } from "@shared/types";
 
 function addDays(iso: string, days: number): string {
   const date = new Date(`${iso}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return new Date().toISOString().slice(0, 10);
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
+}
+
+/** Monday of the week containing the given date (or today). */
+function mondayOf(date: Date): string {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const offset = (d.getUTCDay() + 6) % 7;
+  d.setUTCDate(d.getUTCDate() - offset);
+  return d.toISOString().slice(0, 10);
 }
 
 function LessonCard({ lesson }: { lesson: TimetableLesson }) {
@@ -104,7 +113,17 @@ export function TimetablePage() {
   });
 
   const data: Timetable | undefined = query.data;
-  const base = data?.weekBeginning ?? "2026-11-02";
+
+  // Navigate from the last known week, or the week we asked for, or this week.
+  // Never from a hard-coded date, and never blocked by a failed load.
+  const [requestedWeek, setRequestedWeek] = useState<string>(() => mondayOf(new Date()));
+  const base = data?.weekBeginning ?? requestedWeek;
+
+  const goToWeek = (iso: string) => {
+    setRequestedWeek(iso);
+    setWeek(iso);
+    setSelectedDay(0);
+  };
 
   // Follow the dashboard clock (fixed in demo mode) so “today” matches the rest of the app.
   const dashboard = useQuery({ queryKey: ["dashboard"], queryFn: () => api.dashboard(), staleTime: 30_000 });
@@ -129,11 +148,7 @@ export function TimetablePage() {
             type="button"
             className="icon-btn"
             aria-label="Previous week"
-            onClick={() => {
-              setWeek(addDays(base, -7));
-              setSelectedDay(0);
-            }}
-            disabled={query.isFetching && !query.isPending}
+            onClick={() => goToWeek(addDays(base, -7))}
           >
             <ChevronLeft size={18} />
           </button>
@@ -141,7 +156,10 @@ export function TimetablePage() {
             type="button"
             className="btn btn-tonal btn-sm"
             onClick={() => {
+              const thisWeek = mondayOf(new Date());
+              setRequestedWeek(thisWeek);
               setWeek(null);
+              setSelectedDay(0);
               void query.refetch();
             }}
           >
@@ -151,11 +169,7 @@ export function TimetablePage() {
             type="button"
             className="icon-btn"
             aria-label="Next week"
-            onClick={() => {
-              setWeek(addDays(base, 7));
-              setSelectedDay(0);
-            }}
-            disabled={query.isFetching && !query.isPending}
+            onClick={() => goToWeek(addDays(base, 7))}
           >
             <ChevronRight size={18} />
           </button>

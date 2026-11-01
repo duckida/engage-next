@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { Avatar } from "./Avatar";
 import { AppMark } from "./AppMark";
+import { ErrorBoundary } from "./ErrorBoundary";
 import { api } from "../lib/api";
 import { useMe } from "../lib/useMe";
 import { useTheme, type ThemeMode } from "../lib/theme";
@@ -192,7 +193,9 @@ export function AppShell() {
 
       <main className="main">
         <div className="page-enter" key={location.pathname}>
-          <Outlet />
+          <ErrorBoundary onReset={() => navigate(0)}>
+            <Outlet />
+          </ErrorBoundary>
         </div>
       </main>
 

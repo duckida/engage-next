@@ -75,6 +75,13 @@ function parseFormFields(html: string): Record<string, string> {
 
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
+/**
+ * Hard ceiling on any single portal request. Vercel kills the function at
+ * maxDuration; without this the browser waits on a promise that never settles,
+ * leaving the UI on skeletons forever.
+ */
+const PORTAL_TIMEOUT_MS = 12_000;
+
 const MONTHS = [
   "january", "february", "march", "april", "may", "june",
   "july", "august", "september", "october", "november", "december",
@@ -263,7 +270,6 @@ export function parseTimetable(html: string): Timetable {
         : "Could not read the timetable layout. The portal may have changed.",
     );
   }
-
   return { weekBeginning, days };
 }
 
@@ -378,7 +384,13 @@ export class EngageClient {
     if (!headers.has("accept")) headers.set("accept", "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8");
     if (!headers.has("accept-language")) headers.set("accept-language", "en-GB,en;q=0.9");
 
-    const res = await fetch(url, { ...init, headers, redirect: "manual" });
+    const res = await fetch(url, {
+      ...init,
+      headers,
+      redirect: "manual",
+      // A hung portal must not hang the request forever.
+      signal: AbortSignal.timeout(PORTAL_TIMEOUT_MS),
+    });
     this.storeCookies(res, url);
 
     const location = res.headers.get("location");
@@ -739,6 +751,7 @@ export class EngageClient {
           referer: `${this.base}/VLE/`,
         },
         redirect: "manual",
+        signal: AbortSignal.timeout(PORTAL_TIMEOUT_MS),
       });
 
       const location = res.headers.get("location");

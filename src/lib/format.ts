@@ -14,43 +14,50 @@ const monthFormatter = new Intl.DateTimeFormat("en-GB", { month: "long", year: "
 
 const monthShortFormatter = new Intl.DateTimeFormat("en-GB", { month: "short" });
 
-function parseIso(iso: string): Date {
-  if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return new Date(`${iso}T12:00:00`);
-  return new Date(iso);
+function parseIso(iso: string): Date | null {
+  if (!iso) return null;
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(iso) ? new Date(`${iso}T12:00:00`) : new Date(iso);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+/** Format only when the date is real; Intl throws on invalid dates. */
+function safe(format: Intl.DateTimeFormat, iso: string, fallback = ""): string {
+  const date = parseIso(iso);
+  return date ? format.format(date) : fallback;
 }
 
 export function formatLongDate(iso: string): string {
-  if (!iso) return "";
-  return dateFormatter.format(parseIso(iso));
+  return safe(dateFormatter, iso);
 }
 
 export function formatShortDate(iso: string): string {
-  if (!iso) return "";
-  return shortFormatter.format(parseIso(iso));
+  return safe(shortFormatter, iso);
 }
 
 export function formatMonth(iso: string): string {
   if (!iso) return "";
-  return monthFormatter.format(parseIso(iso.length > 7 ? iso : `${iso}-01`));
+  return safe(monthFormatter, iso.length > 7 ? iso : `${iso}-01`);
 }
 
 export function formatMonthShort(iso: string): string {
   if (!iso) return "";
-  return monthShortFormatter.format(parseIso(iso.length > 7 ? iso : `${iso}-01`));
+  return safe(monthShortFormatter, iso.length > 7 ? iso : `${iso}-01`);
 }
 
 export function dayNumber(iso: string): string {
-  return String(parseIso(iso).getDate());
+  const date = parseIso(iso);
+  return date ? String(date.getDate()) : "–";
 }
 
 export function weekdayShort(iso: string): string {
-  return new Intl.DateTimeFormat("en-GB", { weekday: "short" }).format(parseIso(iso));
+  return safe(new Intl.DateTimeFormat("en-GB", { weekday: "short" }), iso, "—");
 }
 
 export function relativeDate(iso: string, todayIso?: string): string {
   if (!iso) return "";
-  const today = todayIso ? parseIso(todayIso) : new Date();
   const date = parseIso(iso);
+  if (!date) return "";
+  const today = (todayIso ? parseIso(todayIso) : null) ?? new Date();
   const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const diff = Math.round((start.getTime() - new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()) / 86400000);
 
@@ -62,6 +69,7 @@ export function relativeDate(iso: string, todayIso?: string): string {
 
 export function greeting(nowIso?: string): string {
   const hour = nowIso ? Number(nowIso.slice(11, 13)) : new Date().getHours();
+  if (!Number.isFinite(hour)) return "Hello";
   if (hour < 12) return "Good morning";
   if (hour < 17) return "Good afternoon";
   return "Good evening";

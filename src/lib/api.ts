@@ -21,7 +21,7 @@ export class ApiError extends Error {
   }
 }
 
-type RequestOptions = { authEvent?: boolean };
+type RequestOptions = { authEvent?: boolean; timeoutMs?: number };
 
 function emitUnauthorized() {
   window.dispatchEvent(new CustomEvent("engage:unauthorized"));
@@ -35,10 +35,20 @@ async function request<T>(path: string, init: RequestInit = {}, options: Request
   try {
     response = await fetch(`/api${path}`, {
       credentials: "same-origin",
+      // Never let the UI hang on skeletons if the server stalls.
+      signal: AbortSignal.timeout(options.timeoutMs ?? 25_000),
       ...init,
       headers,
     });
-  } catch {
+  } catch (error) {
+    const name = (error as { name?: string })?.name;
+    if (name === "TimeoutError" || name === "AbortError") {
+      throw new ApiError(
+        "timeout",
+        "That request took too long. Check your connection and try again.",
+        504,
+      );
+    }
     // fetch() only rejects on a transport failure: no server, no network.
     throw new ApiError(
       "offline",

@@ -264,6 +264,53 @@ app.get(
   }),
 );
 
+/**
+ * Diagnostic: reports what the portal actually returned, so a parse failure can
+ * be diagnosed from the browser without access to the server logs.
+ */
+app.get(
+  "/api/timetable/debug",
+  asyncHandler(async (req, res) => {
+    const session = req.session!;
+    if (session.demo) {
+      res.json({ demo: true, note: "Demo mode — no portal request was made." });
+      return;
+    }
+
+    const requested = dateParam(req.query.week);
+    const base = new Date();
+    const week = requested ? mondayOf(requested) : mondayOf(londonParts(base).date);
+    const client = session.backend as EngageClient;
+
+    const out: Record<string, unknown> = { week, base: client.base };
+    try {
+      const page = await client.getPage("/VLE/WeeklyTimetable.aspx");
+      out.pageStatus = page.status;
+      out.pageUrl = page.url;
+      out.pageBytes = page.text.length;
+
+      const cheerio = await import("cheerio");
+      const $ = cheerio.load(page.text);
+      out.weekLabel = $("[id$='lblWeek']").first().text().trim();
+      const table = $("table[id^='tblTimeTable']").first();
+      out.tablesFound = $("table").length;
+      out.timetableTableFound = table.length > 0;
+      out.rows = table.find("tr").length;
+      out.lessonTextCells = table.find(".ttLessonText").length;
+      out.firstCells = table
+        .find("tr")
+        .slice(0, 4)
+        .map((_, r) => $(r).children("td, th").first().text().replace(/\s+/g, " ").trim())
+        .get();
+      out.snippet = page.text.replace(/\s+/g, " ").slice(0, 400);
+    } catch (error) {
+      out.error = error instanceof Error ? error.message : String(error);
+    }
+
+    res.json(out);
+  }),
+);
+
 app.get(
   "/api/points",
   asyncHandler(async (req, res) => {
@@ -410,6 +457,18 @@ app.use((error: unknown, req: Request, res: Response, next: NextFunction) => {
       error: {
         code: "school_not_found",
         message: "No Engage portal found at that address. Check your school's address and try again.",
+      },
+    });
+    return;
+  }
+
+  // AbortSignal.timeout() rejects with a TimeoutError (or an AbortError).
+  const errorName = (error as { name?: string })?.name;
+  if (errorName === "TimeoutError" || errorName === "AbortError") {
+    res.status(504).json({
+      error: {
+        code: "timeout",
+        message: "Your school's portal took too long to respond. Please try again.",
       },
     });
     return;
