@@ -384,6 +384,19 @@ app.use((error: unknown, req: Request, res: Response, next: NextFunction) => {
     res.status(502).json({ error: { code: "engage_error", message: error.message } });
     return;
   }
+
+  // A bad school address surfaces as a DNS failure from fetch().
+  const cause = (error as { cause?: { code?: string } })?.cause;
+  const dnsCode = cause?.code ?? (error as { code?: string })?.code;
+  if (dnsCode === "ENOTFOUND" || dnsCode === "EAI_AGAIN" || dnsCode === "ECONNREFUSED" || dnsCode === "ETIMEDOUT") {
+    res.status(404).json({
+      error: {
+        code: "school_not_found",
+        message: "No Engage portal found at that address. Check your school's address and try again.",
+      },
+    });
+    return;
+  }
   if (error instanceof SyntaxError && "body" in error) {
     res.status(400).json({ error: { code: "bad_request", message: "Invalid request body." } });
     return;
