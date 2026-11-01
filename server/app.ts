@@ -200,17 +200,38 @@ app.use("/api", (req, res, next) => {
   }
   (req as AuthedRequest).session = session;
 
-  // The portal rotates its cookies as we browse. Re-seal on the way out so the
-  // browser always holds a current jar; otherwise the session would die after
-  // the first request on a stateless host.
+  // The portal rotates its cookies as we browse. Re-seal before the response is
+  // written so the browser always holds a current jar. (Doing this in a
+  // "finish" handler throws ERR_HTTP_HEADERS_SENT — the response is already out.)
   if (!session.demo) {
-    res.on("finish", () => {
-      if (res.statusCode >= 400) return;
-      const client = session.backend as EngageClient;
-      if (typeof client.exportState !== "function") return;
-      const token = sealSession(client.exportState());
-      if (token) res.append("Set-Cookie", sessionCookie(token));
-    });
+    const seal = () => {
+      if (res.headersSent || res.statusCode >= 400) return;
+      try {
+        const client = session.backend as EngageClient;
+        if (typeof client.exportState !== "function") return;
+        const token = sealSession(client.exportState());
+        if (!token) return;
+
+        const cookie = sessionCookie(token);
+        const existing = res.getHeader("Set-Cookie");
+        res.setHeader(
+          "Set-Cookie",
+          existing === undefined
+            ? cookie
+            : ([] as unknown[]).concat(existing as unknown, cookie) as unknown as string[],
+        );
+      } catch {
+        /* never fail a response because re-sealing failed */
+      }
+    };
+
+    for (const method of ["json", "send"] as const) {
+      const original = res[method].bind(res) as (...args: any[]) => Response;
+      (res as any)[method] = (...args: any[]) => {
+        seal();
+        return original(...args);
+      };
+    }
   }
 
   next();

@@ -45,10 +45,37 @@ function parseFormFields(html) {
   return fields;
 }
 var DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+var MONTHS = [
+  "january",
+  "february",
+  "march",
+  "april",
+  "may",
+  "june",
+  "july",
+  "august",
+  "september",
+  "october",
+  "november",
+  "december"
+];
 function isoFromDmy(value) {
-  const m = value.trim().match(/^(\d{1,2})[/.](\d{1,2})[/.](\d{4})$/);
-  if (!m) return null;
-  return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+  const text = value.trim();
+  const numeric = text.match(/^(\d{1,2})[/.](\d{1,2})[/.](\d{4})$/);
+  if (numeric) {
+    return `${numeric[3]}-${numeric[2].padStart(2, "0")}-${numeric[1].padStart(2, "0")}`;
+  }
+  const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) return text;
+  const named = text.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/);
+  if (named) {
+    const monthName = named[2].toLowerCase();
+    const month = MONTHS.findIndex((m) => m === monthName || m.startsWith(monthName.slice(0, 3)));
+    if (month >= 0) {
+      return `${named[3]}-${String(month + 1).padStart(2, "0")}-${named[1].padStart(2, "0")}`;
+    }
+  }
+  return null;
 }
 function addDays(iso, days) {
   const d = /* @__PURE__ */ new Date(`${iso}T12:00:00Z`);
@@ -131,12 +158,14 @@ function parseTimetable(html) {
   if (!table.length) throw new EngageError("Timetable was not present in the page.");
   const weekBeginning = labelIso ?? (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
   const days = [];
+  let sawDayRow = false;
   table.find("tr").each((rowIndex, row) => {
     if (rowIndex === 0) return;
-    const cells = $(row).children("td");
+    const cells = $(row).children("td, th");
     if (cells.length < 2) return;
-    const day = clean(cells.first().text());
-    if (!DAYS.includes(day)) return;
+    const day = matchDay(clean(cells.first().text()));
+    if (!day) return;
+    sawDayRow = true;
     const lessons = [];
     cells.slice(1).each((cellIndex, cell) => {
       const parsed = parseLessonCell($(cell), day, cellIndex);
@@ -146,7 +175,32 @@ function parseTimetable(html) {
     const note = lessons.length === 1 && lessons[0].kind === "event" ? lessons[0].subject : null;
     days.push({ date, day, lessons, note });
   });
+  if (!days.length) {
+    console.error("[engage-next] timetable parse failed", {
+      label,
+      labelIso,
+      tableFound: table.length > 0,
+      sawDayRow,
+      rowCount: table.find("tr").length,
+      firstRowCells: table.find("tr").eq(1).children("td, th").length,
+      firstCellText: clean(table.find("tr").eq(1).children("td, th").first().text()).slice(0, 40),
+      hasLessonText: table.find(".ttLessonText").length,
+      bodySnippet: clean($("body").text()).slice(0, 300)
+    });
+    throw new EngageError(
+      sawDayRow ? "The timetable page loaded but no lessons could be read from it." : "Could not read the timetable layout. The portal may have changed."
+    );
+  }
   return { weekBeginning, days };
+}
+function matchDay(text) {
+  const lower = text.toLowerCase();
+  for (const day of DAYS) {
+    if (lower === day.toLowerCase()) return day;
+    if (new RegExp(`^${day}\\b`, "i").test(text)) return day;
+    if (new RegExp(`\\b${day}\\b`, "i").test(text)) return day;
+  }
+  return null;
 }
 function parsePoints(json) {
   const entries = (json.points ?? []).filter((p) => p.canSee !== false).map((p) => {
@@ -1322,13 +1376,29 @@ app.use("/api", (req, res, next) => {
   }
   req.session = session;
   if (!session.demo) {
-    res.on("finish", () => {
-      if (res.statusCode >= 400) return;
-      const client = session.backend;
-      if (typeof client.exportState !== "function") return;
-      const token = sealSession(client.exportState());
-      if (token) res.append("Set-Cookie", sessionCookie(token));
-    });
+    const seal = () => {
+      if (res.headersSent || res.statusCode >= 400) return;
+      try {
+        const client = session.backend;
+        if (typeof client.exportState !== "function") return;
+        const token = sealSession(client.exportState());
+        if (!token) return;
+        const cookie = sessionCookie(token);
+        const existing = res.getHeader("Set-Cookie");
+        res.setHeader(
+          "Set-Cookie",
+          existing === void 0 ? cookie : [].concat(existing, cookie)
+        );
+      } catch {
+      }
+    };
+    for (const method of ["json", "send"]) {
+      const original = res[method].bind(res);
+      res[method] = (...args) => {
+        seal();
+        return original(...args);
+      };
+    }
   }
   next();
 });

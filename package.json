@@ -10,7 +10,7 @@
     "build:web": "vite build",
     "start": "tsx server/index.ts",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test server/**/*.test.ts"
+    "test": "tsx server/session.test.ts && tsx server/timetable.test.ts"
   },
   "dependencies": {
     "@fontsource-variable/figtree": "^5.2.5",

@@ -75,10 +75,37 @@ function parseFormFields(html: string): Record<string, string> {
 
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
+const MONTHS = [
+  "january", "february", "march", "april", "may", "june",
+  "july", "august", "september", "october", "november", "december",
+];
+
+/**
+ * Parse the portal's various date spellings:
+ *   "02/11/2026", "2.11.2026", "02 November 2026", "2 Nov 2026", "2026-11-02".
+ */
 function isoFromDmy(value: string): string | null {
-  const m = value.trim().match(/^(\d{1,2})[/.](\d{1,2})[/.](\d{4})$/);
-  if (!m) return null;
-  return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+  const text = value.trim();
+
+  const numeric = text.match(/^(\d{1,2})[/.](\d{1,2})[/.](\d{4})$/);
+  if (numeric) {
+    return `${numeric[3]}-${numeric[2].padStart(2, "0")}-${numeric[1].padStart(2, "0")}`;
+  }
+
+  const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) return text;
+
+  // "02 November 2026" / "2 Nov 2026"
+  const named = text.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/);
+  if (named) {
+    const monthName = named[2].toLowerCase();
+    const month = MONTHS.findIndex((m) => m === monthName || m.startsWith(monthName.slice(0, 3)));
+    if (month >= 0) {
+      return `${named[3]}-${String(month + 1).padStart(2, "0")}-${named[1].padStart(2, "0")}`;
+    }
+  }
+
+  return null;
 }
 
 function addDays(iso: string, days: number): string {
@@ -193,13 +220,17 @@ export function parseTimetable(html: string): Timetable {
 
   const weekBeginning = labelIso ?? new Date().toISOString().slice(0, 10);
   const days: TimetableDay[] = [];
+  let sawDayRow = false;
 
   table.find("tr").each((rowIndex, row) => {
     if (rowIndex === 0) return;
-    const cells = $(row).children("td");
+    // Day names may sit in a <th> or a <td> depending on the portal's skin.
+    const cells = $(row).children("td, th");
     if (cells.length < 2) return;
-    const day = clean(cells.first().text());
-    if (!DAYS.includes(day)) return;
+
+    const day = matchDay(clean(cells.first().text()));
+    if (!day) return;
+    sawDayRow = true;
 
     const lessons: TimetableLesson[] = [];
     cells.slice(1).each((cellIndex, cell) => {
@@ -213,7 +244,38 @@ export function parseTimetable(html: string): Timetable {
     days.push({ date, day, lessons, note });
   });
 
+  if (!days.length) {
+    // Fail loudly rather than returning an empty week the UI cannot explain.
+    console.error("[engage-next] timetable parse failed", {
+      label,
+      labelIso,
+      tableFound: table.length > 0,
+      sawDayRow,
+      rowCount: table.find("tr").length,
+      firstRowCells: table.find("tr").eq(1).children("td, th").length,
+      firstCellText: clean(table.find("tr").eq(1).children("td, th").first().text()).slice(0, 40),
+      hasLessonText: table.find(".ttLessonText").length,
+      bodySnippet: clean($("body").text()).slice(0, 300),
+    });
+    throw new EngageError(
+      sawDayRow
+        ? "The timetable page loaded but no lessons could be read from it."
+        : "Could not read the timetable layout. The portal may have changed.",
+    );
+  }
+
   return { weekBeginning, days };
+}
+
+/** "Monday", "Monday 3 November", "MONDAY" -> canonical day name. */
+function matchDay(text: string): string | null {
+  const lower = text.toLowerCase();
+  for (const day of DAYS) {
+    if (lower === day.toLowerCase()) return day;
+    if (new RegExp(`^${day}\\b`, "i").test(text)) return day;
+    if (new RegExp(`\\b${day}\\b`, "i").test(text)) return day;
+  }
+  return null;
 }
 
 function parsePoints(json: any): PointsPayload {

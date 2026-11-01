@@ -175,7 +175,7 @@ export function TimetablePage() {
         </div>
       ) : query.error ? (
         <ErrorState error={query.error} onRetry={() => void query.refetch()} />
-      ) : data ? (
+      ) : data && data.days.length ? (
         <>
           <div className="day-tabs" role="tablist" aria-label="Days">
             {data.days.map((day, index) => (
@@ -208,7 +208,18 @@ export function TimetablePage() {
             ))}
           </div>
         </>
-      ) : null}
+      ) : (
+        <EmptyState
+          icon={<CalendarDays size={20} />}
+          title="No timetable for this week"
+          description="The portal returned no days for this week. Try another week, or reload."
+          action={
+            <button type="button" className="btn btn-tonal" onClick={() => void query.refetch()}>
+              Reload
+            </button>
+          }
+        />
+      )}
     </div>
   );
 }
