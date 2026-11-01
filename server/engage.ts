@@ -75,6 +75,14 @@ function parseFormFields(html: string): Record<string, string> {
 
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
+/** First form field name matching a predicate. */
+function findField(
+  fields: Record<string, string>,
+  predicate: (name: string) => boolean,
+): string | undefined {
+  return Object.keys(fields).find(predicate);
+}
+
 /**
  * Hard ceiling on any single portal request. Vercel kills the function at
  * maxDuration; without this the browser waits on a promise that never settles,
@@ -155,10 +163,29 @@ function parseLessonCell(cell: cheerio.Cheerio<any>, day: string, index: number)
 
   if (!lessonText.length) {
     const cls = cell.attr("class") ?? "";
+    const raw = textLines(cell.html() ?? "");
+
+    // Holiday weeks collapse to one wide cell carrying the closure note, e.g.
+    // "Autumn Half Term" or "School closed", usually without a time range.
+    const text = clean(raw.join(" "));
+    if (text && /half\s*term|holiday|school closed|inset|bank holiday|closure/i.test(text)) {
+      return {
+        id: `${day}-${index}-holiday`,
+        kind: "event",
+        period: null,
+        subject: text,
+        start: "",
+        end: "",
+        room: null,
+        teachers: [],
+        image: null,
+        color: null,
+      };
+    }
+
     if (cls.includes("break")) {
-      const lines = textLines(cell.html() ?? "");
-      const start = lines[0] ?? "";
-      const end = lines[1] ?? "";
+      const start = raw[0] ?? "";
+      const end = raw[1] ?? "";
       return {
         id: `${day}-${index}-break`,
         kind: "break",
@@ -563,25 +590,38 @@ export class EngageClient {
     const saturday = addDays(monday, 5);
     const text = dateToDmy(saturday);
     const isoState = `${saturday}-00-00-00`;
+
+    // Discover the week-picker fields rather than assuming their control IDs;
+    // ASP.NET names change when the portal is updated.
     const inputName =
-      "ctl00$PageContent$weeklyTimetable$wsTimetableDate$dpWeekSelectorStartDate$dtPicker$dateInput";
+      findField(fields, (n) => /dpWeekSelectorStartDate.*dateInput$/i.test(n) && !/ClientState/i.test(n)) ??
+      findField(fields, (n) => /dtPicker.*dateInput$/i.test(n) && !/ClientState/i.test(n));
     const stateName =
-      "ctl00_PageContent_weeklyTimetable_wsTimetableDate_dpWeekSelectorStartDate_dtPicker_dateInput_ClientState";
+      findField(fields, (n) => /dpWeekSelectorStartDate.*dateInput_ClientState$/i.test(n)) ??
+      findField(fields, (n) => /dtPicker.*dateInput_ClientState$/i.test(n));
+
+    if (!inputName) {
+      // No picker on this page: fall back to whatever week the portal returned.
+      return parseTimetable(page.text);
+    }
 
     fields[inputName] = text;
-    try {
-      const state = JSON.parse(fields[stateName] ?? "{}");
-      fields[stateName] = JSON.stringify({
-        ...state,
-        validationText: isoState,
-        valueAsString: isoState,
-        lastSetTextBoxValue: text,
-      });
-    } catch {
-      /* leave state untouched */
+    if (stateName) {
+      try {
+        const state = JSON.parse(fields[stateName] ?? "{}");
+        fields[stateName] = JSON.stringify({
+          ...state,
+          validationText: isoState,
+          valueAsString: isoState,
+          lastSetTextBoxValue: text,
+        });
+      } catch {
+        /* leave state untouched */
+      }
     }
     fields["__EVENTTARGET"] = inputName;
     fields["__EVENTARGUMENT"] = "";
+    fields["__LASTFOCUS"] = "";
 
     const res = await this.request(path, { method: "POST", form: fields, referer: `${this.base}${path}` });
     if (this.looksLikeLogin(res.text, res.url)) throw new SessionExpiredError("Session expired.");

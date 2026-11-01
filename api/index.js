@@ -45,6 +45,9 @@ function parseFormFields(html) {
   return fields;
 }
 var DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+function findField(fields, predicate) {
+  return Object.keys(fields).find(predicate);
+}
 var PORTAL_TIMEOUT_MS = 12e3;
 var MONTHS = [
   "january",
@@ -103,10 +106,25 @@ function parseLessonCell(cell, day, index) {
   const lessonText = cell.find(".ttLessonText");
   if (!lessonText.length) {
     const cls = cell.attr("class") ?? "";
+    const raw = textLines(cell.html() ?? "");
+    const text = clean(raw.join(" "));
+    if (text && /half\s*term|holiday|school closed|inset|bank holiday|closure/i.test(text)) {
+      return {
+        id: `${day}-${index}-holiday`,
+        kind: "event",
+        period: null,
+        subject: text,
+        start: "",
+        end: "",
+        room: null,
+        teachers: [],
+        image: null,
+        color: null
+      };
+    }
     if (cls.includes("break")) {
-      const lines2 = textLines(cell.html() ?? "");
-      const start2 = lines2[0] ?? "";
-      const end2 = lines2[1] ?? "";
+      const start2 = raw[0] ?? "";
+      const end2 = raw[1] ?? "";
       return {
         id: `${day}-${index}-break`,
         kind: "break",
@@ -417,21 +435,27 @@ var EngageClient = class _EngageClient {
     const saturday = addDays(monday, 5);
     const text = dateToDmy(saturday);
     const isoState = `${saturday}-00-00-00`;
-    const inputName = "ctl00$PageContent$weeklyTimetable$wsTimetableDate$dpWeekSelectorStartDate$dtPicker$dateInput";
-    const stateName = "ctl00_PageContent_weeklyTimetable_wsTimetableDate_dpWeekSelectorStartDate_dtPicker_dateInput_ClientState";
+    const inputName = findField(fields, (n) => /dpWeekSelectorStartDate.*dateInput$/i.test(n) && !/ClientState/i.test(n)) ?? findField(fields, (n) => /dtPicker.*dateInput$/i.test(n) && !/ClientState/i.test(n));
+    const stateName = findField(fields, (n) => /dpWeekSelectorStartDate.*dateInput_ClientState$/i.test(n)) ?? findField(fields, (n) => /dtPicker.*dateInput_ClientState$/i.test(n));
+    if (!inputName) {
+      return parseTimetable(page.text);
+    }
     fields[inputName] = text;
-    try {
-      const state = JSON.parse(fields[stateName] ?? "{}");
-      fields[stateName] = JSON.stringify({
-        ...state,
-        validationText: isoState,
-        valueAsString: isoState,
-        lastSetTextBoxValue: text
-      });
-    } catch {
+    if (stateName) {
+      try {
+        const state = JSON.parse(fields[stateName] ?? "{}");
+        fields[stateName] = JSON.stringify({
+          ...state,
+          validationText: isoState,
+          valueAsString: isoState,
+          lastSetTextBoxValue: text
+        });
+      } catch {
+      }
     }
     fields["__EVENTTARGET"] = inputName;
     fields["__EVENTARGUMENT"] = "";
+    fields["__LASTFOCUS"] = "";
     const res = await this.request(path, { method: "POST", form: fields, referer: `${this.base}${path}` });
     if (this.looksLikeLogin(res.text, res.url)) throw new SessionExpiredError("Session expired.");
     return parseTimetable(res.text);

@@ -113,6 +113,13 @@ export function TimetablePage() {
   });
 
   const data: Timetable | undefined = query.data;
+  const isEmptyWeek =
+    !!data &&
+    data.days.every((d) => d.lessons.filter((l) => l.kind === "lesson").length === 0);
+  const holidayNote =
+    data?.days.map((d) => d.note).find((n) => !!n) ??
+    data?.days.flatMap((d) => d.lessons).find((l) => l.kind === "event")?.subject ??
+    null;
 
   // Navigate from the last known week, or the week we asked for, or this week.
   // Never from a hard-coded date, and never blocked by a failed load.
@@ -189,6 +196,19 @@ export function TimetablePage() {
         </div>
       ) : query.error ? (
         <ErrorState error={query.error} onRetry={() => void query.refetch()} />
+      ) : data && data.days.length && isEmptyWeek ? (
+        <div className="holiday-card">
+          <span className="holiday-icon">
+            <CalendarDays size={26} strokeWidth={1.7} />
+          </span>
+          <div>
+            <h2>{holidayNote || "No lessons this week"}</h2>
+            <p>
+              Week beginning {formatLongDate(data.weekBeginning)} has no lessons scheduled. Use the
+              arrows above to look at another week.
+            </p>
+          </div>
+        </div>
       ) : data && data.days.length ? (
         <>
           <div className="day-tabs" role="tablist" aria-label="Days">
