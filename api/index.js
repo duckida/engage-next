@@ -90,6 +90,10 @@ function dateToDmy(iso) {
   const [y, m, d] = iso.split("-");
   return `${d}/${m}/${y}`;
 }
+function dateToLong(iso) {
+  const d = /* @__PURE__ */ new Date(`${iso}T00:00:00Z`);
+  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric", timeZone: "UTC" });
+}
 function clean(text) {
   return text.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
 }
@@ -215,12 +219,14 @@ function parseTimetable(html) {
 function inspectTimetablePage(html) {
   const $ = cheerio.load(html);
   const table = $("table[id^='tblTimeTable']").first();
+  const fields = parseFormFields(html);
   return {
     weekLabel: $("[id$='lblWeek']").first().text().trim(),
     tablesFound: $("table").length,
     timetableTableFound: table.length > 0,
     rows: table.find("tr").length,
     lessonTextCells: table.find(".ttLessonText").length,
+    relevantFieldNames: Object.keys(fields).filter((name) => /weeklyTimetable|weekSelector|TimetableDate|dtPicker|dateInput|calendar|rad/i.test(name)).slice(0, 40),
     firstCells: table.find("tr").slice(0, 4).map((_, r) => $(r).children("td, th").first().text().replace(/\s+/g, " ").trim()).get(),
     snippet: html.replace(/\s+/g, " ").slice(0, 400)
   };
@@ -443,35 +449,71 @@ var EngageClient = class _EngageClient {
     const path = "/VLE/WeeklyTimetable.aspx";
     const page = await this.getPage(path);
     if (!week) return parseTimetable(page.text);
-    const monday = week.slice(0, 10);
-    const fields = parseFormFields(page.text);
-    const saturday = addDays(monday, 5);
-    const text = dateToDmy(saturday);
-    const isoState = `${saturday}-00-00-00`;
-    const inputName = findField(fields, (n) => /dpWeekSelectorStartDate.*dateInput$/i.test(n) && !/ClientState/i.test(n)) ?? findField(fields, (n) => /dtPicker.*dateInput$/i.test(n) && !/ClientState/i.test(n));
-    const stateName = findField(fields, (n) => /dpWeekSelectorStartDate.*dateInput_ClientState$/i.test(n)) ?? findField(fields, (n) => /dtPicker.*dateInput_ClientState$/i.test(n));
+    return this.postTimetableWeek(page.text, week, path).then((result) => result.timetable);
+  }
+  async postTimetableWeek(pageText, week, path = "/VLE/WeeklyTimetable.aspx") {
+    const targetWeek = week.slice(0, 10);
+    const fields = parseFormFields(pageText);
+    const pickerNames = Object.keys(fields).filter(
+      (name) => /weeklyTimetable|weekSelector|TimetableDate|dtPicker|dateInput/i.test(name) && !/ClientState/i.test(name)
+    );
+    const inputName = findField(fields, (n) => /dpWeekSelectorStartDate.*dateInput$/i.test(n) && !/ClientState/i.test(n)) ?? findField(fields, (n) => /dtPicker.*dateInput$/i.test(n) && !/ClientState/i.test(n)) ?? pickerNames.find((n) => /dateInput$/i.test(n)) ?? pickerNames[0];
+    const stateName = findField(fields, (n) => /dpWeekSelectorStartDate.*dateInput_ClientState$/i.test(n)) ?? findField(fields, (n) => /dtPicker.*dateInput_ClientState$/i.test(n)) ?? Object.keys(fields).find((n) => /dateInput_ClientState$/i.test(n));
     if (!inputName) {
-      return parseTimetable(page.text);
+      return { timetable: parseTimetable(pageText), attempts: [] };
     }
-    fields[inputName] = text;
-    if (stateName) {
-      try {
-        const state = JSON.parse(fields[stateName] ?? "{}");
-        fields[stateName] = JSON.stringify({
-          ...state,
-          validationText: isoState,
-          valueAsString: isoState,
-          lastSetTextBoxValue: text
-        });
-      } catch {
+    const saturday = addDays(targetWeek, 5);
+    const candidates = [
+      { label: "monday-dmy-input", iso: targetWeek, text: dateToDmy(targetWeek), target: inputName },
+      { label: "saturday-dmy-input", iso: saturday, text: dateToDmy(saturday), target: inputName },
+      { label: "monday-long-input", iso: targetWeek, text: dateToLong(targetWeek), target: inputName },
+      { label: "monday-dmy-picker", iso: targetWeek, text: dateToDmy(targetWeek), target: inputName.replace(/\$dateInput$/i, "") },
+      { label: "saturday-dmy-picker", iso: saturday, text: dateToDmy(saturday), target: inputName.replace(/\$dateInput$/i, "") }
+    ].filter((candidate, index, all) => all.findIndex((x) => `${x.text}:${x.target}` === `${candidate.text}:${candidate.target}`) === index);
+    const attempts = [];
+    let fallback = null;
+    for (const candidate of candidates) {
+      const trial = { ...fields };
+      const isoState = `${candidate.iso}-00-00-00`;
+      trial[inputName] = candidate.text;
+      if (stateName) {
+        try {
+          const state = JSON.parse(trial[stateName] ?? "{}");
+          trial[stateName] = JSON.stringify({
+            ...state,
+            enabled: true,
+            emptyMessage: "",
+            validationText: isoState,
+            valueAsString: isoState,
+            lastSetTextBoxValue: candidate.text
+          });
+        } catch {
+          trial[stateName] = JSON.stringify({
+            enabled: true,
+            emptyMessage: "",
+            validationText: isoState,
+            valueAsString: isoState,
+            lastSetTextBoxValue: candidate.text
+          });
+        }
       }
+      trial["__EVENTTARGET"] = candidate.target;
+      trial["__EVENTARGUMENT"] = "";
+      trial["__LASTFOCUS"] = "";
+      const res = await this.request(path, { method: "POST", form: trial, referer: `${this.base}${path}` });
+      if (this.looksLikeLogin(res.text, res.url)) throw new SessionExpiredError("Session expired.");
+      const timetable = parseTimetable(res.text);
+      attempts.push({
+        label: candidate.label,
+        eventTarget: candidate.target,
+        inputValue: candidate.text,
+        stateValue: candidate.iso,
+        returnedWeek: timetable.weekBeginning
+      });
+      fallback ??= timetable;
+      if (timetable.weekBeginning === targetWeek) return { timetable, attempts };
     }
-    fields["__EVENTTARGET"] = inputName;
-    fields["__EVENTARGUMENT"] = "";
-    fields["__LASTFOCUS"] = "";
-    const res = await this.request(path, { method: "POST", form: fields, referer: `${this.base}${path}` });
-    if (this.looksLikeLogin(res.text, res.url)) throw new SessionExpiredError("Session expired.");
-    return parseTimetable(res.text);
+    return { timetable: fallback ?? parseTimetable(pageText), attempts };
   }
   async debugTimetable(week) {
     const path = "/VLE/WeeklyTimetable.aspx";
@@ -485,8 +527,10 @@ var EngageClient = class _EngageClient {
     };
     if (!week) return out;
     try {
-      const timetable = await this.getTimetable(week);
+      const posted = await this.postTimetableWeek(page.text, week, path);
+      const timetable = posted.timetable;
       out.posted = true;
+      out.postAttempts = posted.attempts;
       out.returnedWeekBeginning = timetable.weekBeginning;
       out.days = timetable.days.length;
       out.lessonItems = timetable.days.flatMap((day) => day.lessons).length;

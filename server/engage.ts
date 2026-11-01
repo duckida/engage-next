@@ -49,6 +49,14 @@ type HttpOptions = {
   referer?: string;
 };
 
+type TimetablePostAttempt = {
+  label: string;
+  eventTarget: string;
+  inputValue: string;
+  stateValue: string;
+  returnedWeek: string;
+};
+
 function formBody(fields: Record<string, string>) {
   const params = new URLSearchParams();
   for (const [k, v] of Object.entries(fields)) params.append(k, v);
@@ -132,6 +140,11 @@ function addDays(iso: string, days: number): string {
 function dateToDmy(iso: string): string {
   const [y, m, d] = iso.split("-");
   return `${d}/${m}/${y}`;
+}
+
+function dateToLong(iso: string): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric", timeZone: "UTC" });
 }
 
 function clean(text: string): string {
@@ -303,12 +316,16 @@ export function parseTimetable(html: string): Timetable {
 export function inspectTimetablePage(html: string) {
   const $ = cheerio.load(html);
   const table = $("table[id^='tblTimeTable']").first();
+  const fields = parseFormFields(html);
   return {
     weekLabel: $("[id$='lblWeek']").first().text().trim(),
     tablesFound: $("table").length,
     timetableTableFound: table.length > 0,
     rows: table.find("tr").length,
     lessonTextCells: table.find(".ttLessonText").length,
+    relevantFieldNames: Object.keys(fields)
+      .filter((name) => /weeklyTimetable|weekSelector|TimetableDate|dtPicker|dateInput|calendar|rad/i.test(name))
+      .slice(0, 40),
     firstCells: table
       .find("tr")
       .slice(0, 4)
@@ -603,47 +620,90 @@ export class EngageClient {
     const page = await this.getPage(path);
     if (!week) return parseTimetable(page.text);
 
-    const monday = week.slice(0, 10);
-    const fields = parseFormFields(page.text);
-    const saturday = addDays(monday, 5);
-    const text = dateToDmy(saturday);
-    const isoState = `${saturday}-00-00-00`;
+    return this.postTimetableWeek(page.text, week, path).then((result) => result.timetable);
+  }
 
-    // Discover the week-picker fields rather than assuming their control IDs;
-    // ASP.NET names change when the portal is updated.
+  private async postTimetableWeek(pageText: string, week: string, path = "/VLE/WeeklyTimetable.aspx") {
+    const targetWeek = week.slice(0, 10);
+    const fields = parseFormFields(pageText);
+
+    // Engage's Telerik week picker stores/raises selection changes through a
+    // date input, but different portal skins expect slightly different targets
+    // and text formats. Try the common variants and only accept the one that
+    // actually returns the requested week.
+    const pickerNames = Object.keys(fields).filter(
+      (name) => /weeklyTimetable|weekSelector|TimetableDate|dtPicker|dateInput/i.test(name) && !/ClientState/i.test(name),
+    );
     const inputName =
       findField(fields, (n) => /dpWeekSelectorStartDate.*dateInput$/i.test(n) && !/ClientState/i.test(n)) ??
-      findField(fields, (n) => /dtPicker.*dateInput$/i.test(n) && !/ClientState/i.test(n));
+      findField(fields, (n) => /dtPicker.*dateInput$/i.test(n) && !/ClientState/i.test(n)) ??
+      pickerNames.find((n) => /dateInput$/i.test(n)) ??
+      pickerNames[0];
     const stateName =
       findField(fields, (n) => /dpWeekSelectorStartDate.*dateInput_ClientState$/i.test(n)) ??
-      findField(fields, (n) => /dtPicker.*dateInput_ClientState$/i.test(n));
+      findField(fields, (n) => /dtPicker.*dateInput_ClientState$/i.test(n)) ??
+      Object.keys(fields).find((n) => /dateInput_ClientState$/i.test(n));
 
     if (!inputName) {
-      // No picker on this page: fall back to whatever week the portal returned.
-      return parseTimetable(page.text);
+      return { timetable: parseTimetable(pageText), attempts: [] as TimetablePostAttempt[] };
     }
 
-    fields[inputName] = text;
-    if (stateName) {
-      try {
-        const state = JSON.parse(fields[stateName] ?? "{}");
-        fields[stateName] = JSON.stringify({
-          ...state,
-          validationText: isoState,
-          valueAsString: isoState,
-          lastSetTextBoxValue: text,
-        });
-      } catch {
-        /* leave state untouched */
+    const saturday = addDays(targetWeek, 5);
+    const candidates = [
+      { label: "monday-dmy-input", iso: targetWeek, text: dateToDmy(targetWeek), target: inputName },
+      { label: "saturday-dmy-input", iso: saturday, text: dateToDmy(saturday), target: inputName },
+      { label: "monday-long-input", iso: targetWeek, text: dateToLong(targetWeek), target: inputName },
+      { label: "monday-dmy-picker", iso: targetWeek, text: dateToDmy(targetWeek), target: inputName.replace(/\$dateInput$/i, "") },
+      { label: "saturday-dmy-picker", iso: saturday, text: dateToDmy(saturday), target: inputName.replace(/\$dateInput$/i, "") },
+    ].filter((candidate, index, all) => all.findIndex((x) => `${x.text}:${x.target}` === `${candidate.text}:${candidate.target}`) === index);
+
+    const attempts: TimetablePostAttempt[] = [];
+    let fallback: Timetable | null = null;
+
+    for (const candidate of candidates) {
+      const trial = { ...fields };
+      const isoState = `${candidate.iso}-00-00-00`;
+      trial[inputName] = candidate.text;
+      if (stateName) {
+        try {
+          const state = JSON.parse(trial[stateName] ?? "{}");
+          trial[stateName] = JSON.stringify({
+            ...state,
+            enabled: true,
+            emptyMessage: "",
+            validationText: isoState,
+            valueAsString: isoState,
+            lastSetTextBoxValue: candidate.text,
+          });
+        } catch {
+          trial[stateName] = JSON.stringify({
+            enabled: true,
+            emptyMessage: "",
+            validationText: isoState,
+            valueAsString: isoState,
+            lastSetTextBoxValue: candidate.text,
+          });
+        }
       }
-    }
-    fields["__EVENTTARGET"] = inputName;
-    fields["__EVENTARGUMENT"] = "";
-    fields["__LASTFOCUS"] = "";
+      trial["__EVENTTARGET"] = candidate.target;
+      trial["__EVENTARGUMENT"] = "";
+      trial["__LASTFOCUS"] = "";
 
-    const res = await this.request(path, { method: "POST", form: fields, referer: `${this.base}${path}` });
-    if (this.looksLikeLogin(res.text, res.url)) throw new SessionExpiredError("Session expired.");
-    return parseTimetable(res.text);
+      const res = await this.request(path, { method: "POST", form: trial, referer: `${this.base}${path}` });
+      if (this.looksLikeLogin(res.text, res.url)) throw new SessionExpiredError("Session expired.");
+      const timetable = parseTimetable(res.text);
+      attempts.push({
+        label: candidate.label,
+        eventTarget: candidate.target,
+        inputValue: candidate.text,
+        stateValue: candidate.iso,
+        returnedWeek: timetable.weekBeginning,
+      });
+      fallback ??= timetable;
+      if (timetable.weekBeginning === targetWeek) return { timetable, attempts };
+    }
+
+    return { timetable: fallback ?? parseTimetable(pageText), attempts };
   }
 
   async debugTimetable(week?: string) {
@@ -660,8 +720,10 @@ export class EngageClient {
     if (!week) return out;
 
     try {
-      const timetable = await this.getTimetable(week);
+      const posted = await this.postTimetableWeek(page.text, week, path);
+      const timetable = posted.timetable;
       out.posted = true;
+      out.postAttempts = posted.attempts;
       out.returnedWeekBeginning = timetable.weekBeginning;
       out.days = timetable.days.length;
       out.lessonItems = timetable.days.flatMap((day) => day.lessons).length;
