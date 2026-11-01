@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
 import { api } from "../lib/api";
@@ -42,12 +42,30 @@ function timeRange(lesson: TimetableLesson): string {
   return lesson.start || lesson.end || "All day";
 }
 
-function LessonCard({ lesson }: { lesson: TimetableLesson }) {
+function minutesFromTime(value: string): number | null {
+  const match = value.match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return null;
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+function lessonGridStyle(lesson: TimetableLesson, dayStartMinutes: number): CSSProperties {
+  const start = minutesFromTime(lesson.start);
+  const end = minutesFromTime(lesson.end);
+  if (start === null || end === null || end <= start) return {};
+
+  const slotMinutes = 5;
+  const rowStart = Math.max(1, Math.floor((start - dayStartMinutes) / slotMinutes) + 1);
+  const duration = Math.max(slotMinutes, end - start);
+  const rowSpan = Math.max(4, Math.round(duration / slotMinutes));
+  return { gridRow: `${rowStart} / span ${rowSpan}` };
+}
+
+function LessonCard({ lesson, dayStartMinutes }: { lesson: TimetableLesson; dayStartMinutes: number }) {
   const isBreak = lesson.kind !== "lesson";
   return (
     <li
       className={`lesson-card ${isBreak ? "is-break" : ""}`}
-      style={subjectStyle(lesson.subject)}
+      style={{ ...subjectStyle(lesson.subject), ...lessonGridStyle(lesson, dayStartMinutes) }}
     >
       <div className="lesson-card-body">
         <time className="lesson-card-time">{timeRange(lesson)}</time>
@@ -70,11 +88,13 @@ function DayColumn({
   todayIso,
   selected,
   onSelect,
+  dayStartMinutes,
 }: {
   day: TimetableDay;
   todayIso: string;
   selected: boolean;
   onSelect: () => void;
+  dayStartMinutes: number;
 }) {
   const isToday = day.date === todayIso;
   const lessons = day.lessons;
@@ -97,7 +117,7 @@ function DayColumn({
       {lessons.length ? (
         <ol className="lesson-stack">
           {lessons.map((lesson) => (
-            <LessonCard key={lesson.id} lesson={lesson} />
+            <LessonCard key={lesson.id} lesson={lesson} dayStartMinutes={dayStartMinutes} />
           ))}
         </ol>
       ) : !day.note ? (
@@ -122,6 +142,13 @@ export function TimetablePage() {
 
   const data: Timetable | undefined = query.data;
   const visibleDays = useMemo(() => data?.days.filter(isWeekday) ?? [], [data]);
+  const dayStartMinutes = useMemo(() => {
+    const starts = visibleDays
+      .flatMap((day) => day.lessons)
+      .map((lesson) => minutesFromTime(lesson.start))
+      .filter((value): value is number => value !== null);
+    return starts.length ? Math.min(...starts) : 8 * 60;
+  }, [visibleDays]);
   const isEmptyWeek =
     !!data &&
     visibleDays.every((d) => d.lessons.filter((l) => l.kind === "lesson").length === 0);
@@ -135,24 +162,11 @@ export function TimetablePage() {
   const [requestedWeek, setRequestedWeek] = useState<string>(() => mondayOf(new Date()));
   const base = data?.weekBeginning ?? requestedWeek;
 
-  const moveDay = (direction: -1 | 1) => {
-    if (!visibleDays.length) {
-      setRequestedWeek(addDays(base, direction * 7));
-      setWeek(addDays(base, direction * 7));
-      setSelectedDay(direction > 0 ? 0 : Number.MAX_SAFE_INTEGER);
-      return;
-    }
-
-    const nextIndex = selectedDay + direction;
-    if (nextIndex >= 0 && nextIndex < visibleDays.length) {
-      setSelectedDay(nextIndex);
-      return;
-    }
-
+  const moveWeek = (direction: -1 | 1) => {
     const nextWeek = addDays(data?.weekBeginning ?? base, direction * 7);
     setRequestedWeek(nextWeek);
     setWeek(nextWeek);
-    setSelectedDay(direction > 0 ? 0 : Number.MAX_SAFE_INTEGER);
+    setSelectedDay((index) => clampDayIndex(visibleDays, index));
   };
 
   // Follow the dashboard clock (fixed in demo mode) so “today” matches the rest of the app.
@@ -190,9 +204,9 @@ export function TimetablePage() {
           <button
             type="button"
             className="icon-btn"
-            aria-label="Previous day"
-            title="Previous day"
-            onClick={() => moveDay(-1)}
+            aria-label="Previous week"
+            title="Previous week"
+            onClick={() => moveWeek(-1)}
           >
             <ChevronLeft size={18} />
           </button>
@@ -206,9 +220,9 @@ export function TimetablePage() {
           <button
             type="button"
             className="icon-btn"
-            aria-label="Next day"
-            title="Next day"
-            onClick={() => moveDay(1)}
+            aria-label="Next week"
+            title="Next week"
+            onClick={() => moveWeek(1)}
           >
             <ChevronRight size={18} />
           </button>
@@ -266,11 +280,12 @@ export function TimetablePage() {
               {visibleDays.map((day, index) => (
                 <div key={day.date} className={`day-slot ${selectedDay === index ? "is-open" : ""}`}>
                   <DayColumn
-                    day={day}
-                    todayIso={todayIso}
-                    selected={selectedDay === index}
-                    onSelect={() => setSelectedDay(index)}
-                  />
+                  day={day}
+                  todayIso={todayIso}
+                  selected={selectedDay === index}
+                  onSelect={() => setSelectedDay(index)}
+                  dayStartMinutes={dayStartMinutes}
+                />
                 </div>
               ))}
             </div>
