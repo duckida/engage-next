@@ -31,11 +31,21 @@ async function request<T>(path: string, init: RequestInit = {}, options: Request
   const headers = new Headers(init.headers);
   if (init.body && !headers.has("content-type")) headers.set("content-type", "application/json");
 
-  const response = await fetch(`/api${path}`, {
-    credentials: "same-origin",
-    ...init,
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`/api${path}`, {
+      credentials: "same-origin",
+      ...init,
+      headers,
+    });
+  } catch {
+    // fetch() only rejects on a transport failure: no server, no network.
+    throw new ApiError(
+      "offline",
+      "Can’t reach the local server. Start it with npm run dev and try again.",
+      0,
+    );
+  }
 
   if (!response.ok) {
     let code = "unknown";
@@ -46,6 +56,15 @@ async function request<T>(path: string, init: RequestInit = {}, options: Request
       if (payload?.error?.message) message = payload.error.message;
     } catch {
       /* keep the generic message */
+    }
+
+    // A non-JSON 404 means the API isn't mounted here at all (static host).
+    if (response.status === 404 && code === "unknown") {
+      throw new ApiError(
+        "no_api",
+        "This build has no local server behind it. Run the app with npm run dev on your own computer.",
+        404,
+      );
     }
 
     if (response.status === 401 && options.authEvent !== false) emitUnauthorized();

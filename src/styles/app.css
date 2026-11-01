@@ -2279,6 +2279,81 @@ html[data-theme="dark"] .lesson-card-time strong {
   text-overflow: ellipsis;
 }
 
+/* ---------- Unavailable (no API) ---------- */
+
+.unavailable {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--bg);
+}
+
+.unavailable-card {
+  width: min(460px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 30px 28px;
+  border-radius: var(--r-xl);
+  background: var(--surface);
+  border: 1px solid var(--surface-3);
+  box-shadow: var(--shadow-2);
+}
+
+.unavailable-card h1 {
+  font-size: 1.35rem;
+  letter-spacing: -0.02em;
+}
+
+.unavailable-card > p {
+  font-size: 0.9rem;
+  color: var(--on-bg-muted);
+}
+
+.unavailable-help {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+  border: 1px solid var(--surface-3);
+}
+
+.unavailable-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--on-bg-faint);
+}
+
+.unavailable-help pre {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--r-sm);
+  background: var(--bg-dim);
+  font-size: 0.82rem;
+  line-height: 1.6;
+  overflow-x: auto;
+}
+
+.unavailable-help code {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+.unavailable-note {
+  font-size: 0.8rem;
+  color: var(--on-bg-faint);
+  line-height: 1.5;
+}
+
+.unavailable-card .btn {
+  align-self: flex-start;
+  margin-top: 4px;
+}
+
 /* ---------- Login ---------- */
 
 .login {

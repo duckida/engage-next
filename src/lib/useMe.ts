@@ -1,16 +1,22 @@
 import { useQuery } from "@tanstack/react-query";
-import { api } from "./api";
+import { api, ApiError } from "./api";
 
 export function useMe() {
   return useQuery({
     queryKey: ["me"],
     queryFn: api.me,
+    // Never retry: /api/me answers 200 with `user: null` when logged out, so a
+    // rejection means the server itself is unreachable. Retrying just spins.
     retry: false,
     staleTime: 5 * 60_000,
-    // /api/me answers 200 with `user: null` when logged out, so this is a
-    // stable state — never refetch it on mount/focus/reconnect.
     refetchOnMount: false,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
   });
+}
+
+/** True when the API is missing entirely rather than merely unauthenticated. */
+export function isApiMissing(error: unknown): boolean {
+  const code = (error as ApiError | undefined)?.code;
+  return code === "no_api" || code === "offline";
 }

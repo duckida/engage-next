@@ -247,6 +247,25 @@ function parsePoints(json: any): PointsPayload {
   };
 }
 
+export type SerializedCookie = {
+  k: string;
+  v: string;
+  d?: string;
+  p?: string;
+  e?: number;
+  s?: boolean;
+  h?: boolean;
+};
+
+/** Portable session snapshot, encrypted into the browser cookie. */
+export type SerializedSession = {
+  v: 1;
+  school: string;
+  cookies: SerializedCookie[];
+  pupilId?: string | null;
+  user?: SessionUser | null;
+};
+
 export class EngageClient {
   private jar = new CookieJar();
   private formPage: string | null = null;
@@ -596,6 +615,51 @@ export class EngageClient {
 
   async reauthenticate(): Promise<void> {
     await this.ensureSession();
+  }
+
+  /** Snapshot enough state to rebuild this client in another process. */
+  exportState(): SerializedSession {
+    const jar = this.jar.serializeSync();
+    const cookies = (jar?.cookies ?? []).map((c) => ({
+      k: String(c.key),
+      v: String(c.value),
+      d: c.domain ? String(c.domain) : undefined,
+      p: c.path ? String(c.path) : undefined,
+      e: c.expires && c.expires !== "Infinity" ? new Date(String(c.expires)).getTime() : undefined,
+      s: Boolean(c.secure),
+      h: Boolean(c.httpOnly),
+    }));
+
+    return {
+      v: 1,
+      school: this.base.replace(/^https:\/\//, "").replace(/\.engagehosted\.com$/, ""),
+      cookies,
+      pupilId: this.pupilId,
+      user: this.user,
+    };
+  }
+
+  /** Rebuild a client from a snapshot produced by exportState(). */
+  static fromState(state: SerializedSession): EngageClient {
+    const client = new EngageClient(state.school);
+    const jar = CookieJar.deserializeSync({
+      version: "tough-cookie@5.1.1",
+      storeType: "MemoryCookieStore",
+      rejectPublicSuffixes: true,
+      cookies: state.cookies.map((c) => ({
+        key: c.k,
+        value: c.v,
+        domain: c.d,
+        path: c.p,
+        expires: c.e ? new Date(c.e).toISOString() : "Infinity",
+        secure: c.s,
+        httpOnly: c.h,
+      })),
+    } as never);
+    client.jar = jar;
+    client.pupilId = state.pupilId ?? null;
+    client.user = state.user ?? null;
+    return client;
   }
 
   async fetchRaw(path: string): Promise<{ buffer: Buffer; contentType: string }> {

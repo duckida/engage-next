@@ -2,14 +2,11 @@ import { useState, type FormEvent } from "react";
 import { ArrowLeft, ArrowRight, Eye, EyeOff, Loader2, LockKeyhole, School } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "../lib/api";
-import { useMe } from "../lib/useMe";
 import { AppMark } from "../components/AppMark";
-
 type Step = "school" | "account";
 
-export function LoginPage() {
+export function LoginPage({ demo = false }: { demo?: boolean }) {
   const queryClient = useQueryClient();
-  const me = useMe();
   const [step, setStep] = useState<Step>("school");
   const [school, setSchool] = useState("");
   const [username, setUsername] = useState("");
@@ -137,7 +134,7 @@ export function LoginPage() {
                 <ArrowLeft size={14} className="login-school-back" />
               </button>
 
-              {me.data?.demo ? (
+              {demo ? (
                 <div className="demo-notice">
                   <strong>Demo mode.</strong> This build is showing fixture data. Restart the app
                   without <code>ENGAGE_DEMO</code> to sign in with your account.
