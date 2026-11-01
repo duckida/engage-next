@@ -103,6 +103,8 @@ export type MePayload = {
   /** null when there is no active session (logged out). */
   user: SessionUser | null;
   demo: boolean;
+  /** Engage sub-domain slug, e.g. "stmarks". Null when logged out or in demo. */
+  school: string | null;
 };
 
 export type ApiError = {

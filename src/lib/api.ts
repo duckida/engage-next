@@ -59,10 +59,10 @@ async function request<T>(path: string, init: RequestInit = {}, options: Request
 export const api = {
   // No auth event here: a 401 from /me is how we learn we're logged out.
   me: () => request<MePayload>("/me", {}, { authEvent: false }),
-  login: (username: string, password: string) =>
+  login: (school: string, username: string, password: string) =>
     request<MePayload>(
       "/login",
-      { method: "POST", body: JSON.stringify({ username, password }) },
+      { method: "POST", body: JSON.stringify({ school, username, password }) },
       { authEvent: false },
     ),
   logout: () => request<{ ok: boolean }>("/logout", { method: "POST" }),

@@ -19,6 +19,7 @@ type Session = {
   id: string;
   backend: Backend;
   demo: boolean;
+  school: string | null;
   createdAt: number;
   lastUsed: number;
   cache: Map<string, CacheEntry>;
@@ -31,6 +32,7 @@ const demoSession: Session = {
   id: "demo",
   backend: new DemoBackend(),
   demo: true,
+  school: null,
   createdAt: Date.now(),
   lastUsed: Date.now(),
   cache: new Map(),
@@ -41,6 +43,7 @@ function newSession(backend: Backend, demo = false): Session {
     id: crypto.randomUUID(),
     backend,
     demo,
+    school: null,
     createdAt: Date.now(),
     lastUsed: Date.now(),
     cache: new Map(),
@@ -89,6 +92,23 @@ const asyncHandler =
     handler(req as AuthedRequest, res).catch(next);
   };
 
+/**
+ * Turn whatever the user typed into a bare Engage sub-domain slug.
+ * Accepts "stmarks", "st-marks", "stmarks.engagehosted.com" or a full URL.
+ */
+function normaliseSchool(input: string): string | null {
+  const raw = input.trim().toLowerCase();
+  if (!raw) return null;
+
+  const withoutScheme = raw.replace(/^https?:\/\//, "");
+  const host = withoutScheme.split("/")[0];
+  const slug = host.replace(/\.engagehosted\.com$/, "");
+
+  if (!/^[a-z0-9][a-z0-9-]{0,62}$/.test(slug)) return null;
+  if (slug.includes("--")) return null;
+  return slug;
+}
+
 function dateParam(value: unknown): string | undefined {
   if (typeof value !== "string" || !value) return undefined;
   return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : undefined;
@@ -123,10 +143,17 @@ app.get("/api/health", (req, res) => {
 app.post(
   "/api/login",
   asyncHandler(async (req, res) => {
-    const body = req.body as { username?: unknown; password?: unknown };
+    const body = req.body as { school?: unknown; username?: unknown; password?: unknown };
     const username = typeof body?.username === "string" ? body.username.trim() : "";
     const password = typeof body?.password === "string" ? body.password : "";
+    const school = normaliseSchool(typeof body?.school === "string" ? body.school : "");
 
+    if (!school) {
+      res.status(400).json({
+        error: { code: "bad_request", message: "Enter your school's Engage address." },
+      });
+      return;
+    }
     if (!username || !password) {
       res.status(400).json({ error: { code: "bad_request", message: "Enter your Engage username and password." } });
       return;
@@ -137,13 +164,14 @@ app.post(
     }
 
     if (demoMode) {
-      res.json({ user: demoSession.backend.getUser(), demo: true });
+      res.json({ user: demoSession.backend.getUser(), demo: true, school: null });
       return;
     }
 
-    const client = new EngageClient();
+    const client = new EngageClient(school);
     const user = await client.login(username, password);
     const session = newSession(client);
+    session.school = school;
     sessions.set(session.id, session);
 
     res.cookie("en_sid", session.id, {
@@ -152,7 +180,7 @@ app.post(
       path: "/",
       maxAge: 12 * 60 * 60 * 1000,
     });
-    res.json({ user, demo: false });
+    res.json({ user, demo: false, school });
   }),
 );
 
@@ -168,10 +196,10 @@ app.post("/api/logout", (req, res) => {
 app.get("/api/me", (req, res) => {
   const session = sessionFor(req as AuthedRequest);
   if (!session) {
-    res.json({ user: null, demo: demoMode });
+    res.json({ user: null, demo: demoMode, school: null });
     return;
   }
-  res.json({ user: session.backend.getUser(), demo: session.demo });
+  res.json({ user: session.backend.getUser(), demo: session.demo, school: session.school });
 });
 
 app.use("/api", (req, res, next) => {

@@ -10,7 +10,7 @@ import type {
 
 /**
  * Everything the API needs from a portal connection. The real implementation
- * talks to holmegrange.engagehosted.com; the demo implementation reads fixtures.
+ * talks to <school>.engagehosted.com; the demo implementation reads fixtures.
  */
 export interface Backend {
   getUser(): SessionUser;

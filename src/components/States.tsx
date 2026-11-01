@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { AlertCircle, Inbox, RefreshCw } from "lucide-react";
 import type { ApiError } from "../lib/api";
+import { AppMark } from "./AppMark";
 
 export function Skeleton({ className = "", style }: { className?: string; style?: React.CSSProperties }) {
   return <div className={`skeleton ${className}`.trim()} style={style} />;
@@ -10,7 +11,7 @@ export function Splash() {
   return (
     <div className="splash" role="status" aria-label="Loading">
       <div className="splash-mark">
-        <img src="/crest.png" alt="" />
+        <AppMark size={56} />
       </div>
     </div>
   );

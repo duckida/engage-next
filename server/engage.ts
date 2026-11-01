@@ -13,7 +13,14 @@ import type {
   TimetableLesson,
 } from "../shared/types.ts";
 
-export const BASE = "https://holmegrange.engagehosted.com";
+/**
+ * Build the Engage host for a school slug, e.g. "stmarks" ->
+ * https://stmarks.engagehosted.com. The school is chosen at sign-in time;
+ * nothing is hard-coded to one institution.
+ */
+export function schoolBaseUrl(school: string): string {
+  return `https://${school}.engagehosted.com`;
+}
 
 export class AuthError extends Error {
   code = "auth_failed";
@@ -245,8 +252,14 @@ export class EngageClient {
   private formPage: string | null = null;
   private pupilId: string | null = null;
   user: SessionUser | null = null;
+  readonly base: string;
 
-  constructor(private credentials?: { username: string; password: string }) {}
+  constructor(
+    school: string,
+    private credentials?: { username: string; password: string },
+  ) {
+    this.base = schoolBaseUrl(school);
+  }
 
   getUser(): SessionUser {
     if (!this.user) throw new EngageError("Not signed in.");
@@ -305,7 +318,7 @@ export class EngageClient {
   }
 
   async request(path: string, options: HttpOptions = {}): Promise<HttpResult> {
-    const url = path.startsWith("http") ? path : `${BASE}${path.startsWith("/") ? "" : "/"}${path}`;
+    const url = path.startsWith("http") ? path : `${this.base}${path.startsWith("/") ? "" : "/"}${path}`;
     const headers: Record<string, string> = { ...(options.headers ?? {}) };
     if (options.referer) headers.referer = options.referer;
 
@@ -348,7 +361,7 @@ export class EngageClient {
     const result = await this.request("/Login.aspx?ReturnUrl=%2f", {
       method: "POST",
       form: fields,
-      referer: `${BASE}/Login.aspx?ReturnUrl=%2f`,
+      referer: `${this.base}/Login.aspx?ReturnUrl=%2f`,
     });
 
     const loggedOut = this.looksLikeLogin(result.text, result.url);
@@ -478,7 +491,7 @@ export class EngageClient {
     fields["__EVENTTARGET"] = inputName;
     fields["__EVENTARGUMENT"] = "";
 
-    const res = await this.request(path, { method: "POST", form: fields, referer: `${BASE}${path}` });
+    const res = await this.request(path, { method: "POST", form: fields, referer: `${this.base}${path}` });
     if (this.looksLikeLogin(res.text, res.url)) throw new SessionExpiredError("Session expired.");
     return parseTimetable(res.text);
   }
@@ -547,7 +560,7 @@ export class EngageClient {
       const dateText = clean($(el).find(".msg-time span").text());
       notices.push({
         id,
-        sender: sender || "Holme Grange",
+        sender: sender || "School office",
         title: title || "Notice",
         date: isoFromDmy(dateText) ?? "",
         photoUrl: proxiedPhoto($(el).find("img").attr("src")),
@@ -587,7 +600,7 @@ export class EngageClient {
 
   async fetchRaw(path: string): Promise<{ buffer: Buffer; contentType: string }> {
     if (!path.startsWith("/") || path.includes("://")) throw new EngageError("Invalid file path.");
-    let url = new URL(path, BASE).href;
+    let url = new URL(path, this.base).href;
 
     for (let depth = 0; depth < 6; depth += 1) {
       const cookies = this.jar.getCookieStringSync(url);
@@ -598,7 +611,7 @@ export class EngageClient {
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
           accept: "application/pdf,image/*,*/*;q=0.8",
           "accept-language": "en-GB,en;q=0.9",
-          referer: `${BASE}/VLE/`,
+          referer: `${this.base}/VLE/`,
         },
         redirect: "manual",
       });

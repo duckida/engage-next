@@ -426,7 +426,7 @@ function pdfEscape(text: string): string {
 
 export function demoReportPdf(report: Report): Buffer {
   const lines = [
-    "Holme Grange School",
+    "Demo School",
     report.title,
     `Academic year ${report.academicYear}`,
     `Generated ${report.createdDate}`,

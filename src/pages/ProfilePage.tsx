@@ -13,9 +13,20 @@ const themeOptions: Array<{ mode: ThemeMode; label: string; icon: typeof Sun }> 
   { mode: "system", label: "System", icon: Monitor },
 ];
 
+/** "stmarks" -> "Stmarks"; "st-marks" -> "St Marks". */
+function titleCase(slug: string): string {
+  return slug
+    .split("-")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
 export function ProfilePage() {
   const me = useMe();
   const { mode, setMode } = useTheme();
+  const school = me.data?.school ?? null;
+  const portalUrl = school ? `https://${school}.engagehosted.com/vle/` : null;
   const siblingsQuery = useQuery({
     queryKey: ["siblings"],
     queryFn: () => api.siblings(),
@@ -53,7 +64,8 @@ export function ProfilePage() {
         <div className="profile-id">
           <h2>{surnameFirst(user.name)}</h2>
           <p>
-            <GraduationCap size={15} /> Pupil · Holme Grange School
+            <GraduationCap size={15} /> Pupil
+            {me.data?.school ? ` · ${titleCase(me.data.school)}` : ""}
           </p>
           <span className={`pill ${me.data?.demo ? "is-demo" : "is-live"}`}>
             <ShieldCheck size={13} /> {me.data?.demo ? "Demo session" : "Live session"}
@@ -131,17 +143,16 @@ export function ProfilePage() {
         <header className="card-head">
           <div>
             <h2>Portal</h2>
-            <p className="card-sub">Open the official Engage portal in a new tab</p>
+            <p className="card-sub">Open your school’s Engage portal in a new tab</p>
           </div>
         </header>
-        <a
-          className="btn btn-tonal"
-          href="https://holmegrange.engagehosted.com/vle/"
-          target="_blank"
-          rel="noreferrer"
-        >
-          <ExternalLink size={16} /> holmegrange.engagehosted.com
-        </a>
+        {portalUrl ? (
+          <a className="btn btn-tonal" href={portalUrl} target="_blank" rel="noreferrer">
+            <ExternalLink size={16} /> {school}.engagehosted.com
+          </a>
+        ) : (
+          <p className="card-sub">Sign in with your school to open the official portal.</p>
+        )}
       </section>
 
       <p className="page-footnote">

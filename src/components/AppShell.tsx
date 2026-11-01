@@ -14,6 +14,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { Avatar } from "./Avatar";
+import { AppMark } from "./AppMark";
 import { api } from "../lib/api";
 import { useMe } from "../lib/useMe";
 import { useTheme, type ThemeMode } from "../lib/theme";
@@ -33,6 +34,15 @@ const themeOptions: Array<{ mode: ThemeMode; label: string; icon: typeof Sun }> 
   { mode: "light", label: "Light theme", icon: Sun },
   { mode: "dark", label: "Dark theme", icon: Moon },
 ];
+
+/** "stmarks" -> "Stmarks"; "st-marks" -> "St Marks". */
+function titleCase(slug: string): string {
+  return slug
+    .split("-")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
 
 function ThemeSegmented({ compact = false }: { compact?: boolean }) {
   const { mode, setMode } = useTheme();
@@ -82,9 +92,13 @@ export function AppShell() {
   const me = useMe();
   const user = me.data?.user;
   const demo = me.data?.demo ?? false;
+  const school = me.data?.school ?? null;
   const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+
+  const schoolLabel = school ? titleCase(school) : demo ? "Demo school" : "Your school";
+  const portalUrl = school ? `https://${school}.engagehosted.com/vle/` : null;
 
   async function signOut() {
     try {
@@ -102,10 +116,10 @@ export function AppShell() {
     <div className="shell">
       <aside className="sidebar">
         <div className="sidebar-top">
-          <Link to="/" className="brand" aria-label="Holme Grange home">
-            <img src="/crest.png" alt="" className="brand-crest" />
+          <Link to="/" className="brand" aria-label="Home">
+            <AppMark size={40} />
             <span className="brand-text">
-              <span className="brand-name">Holme Grange</span>
+              <span className="brand-name">{schoolLabel}</span>
               <span className="brand-sub">Engage</span>
             </span>
           </Link>
@@ -135,15 +149,12 @@ export function AppShell() {
         </nav>
 
         <div className="sidebar-bottom">
-          <a
-            className="portal-link"
-            href="https://holmegrange.engagehosted.com/vle/"
-            target="_blank"
-            rel="noreferrer"
-          >
-            <span>Official portal</span>
-            <ExternalLink size={14} />
-          </a>
+          {portalUrl ? (
+            <a className="portal-link" href={portalUrl} target="_blank" rel="noreferrer">
+              <span>Official portal</span>
+              <ExternalLink size={14} />
+            </a>
+          ) : null}
 
           <div className="sidebar-theme">
             <span>Appearance</span>
@@ -166,9 +177,9 @@ export function AppShell() {
       </aside>
 
       <header className="mobile-bar">
-        <Link to="/" className="mobile-brand" aria-label="Holme Grange home">
-          <img src="/crest.png" alt="" />
-          <span>Holme Grange</span>
+        <Link to="/" className="mobile-brand" aria-label="Home">
+          <AppMark size={30} />
+          <span>{schoolLabel}</span>
         </Link>
         <div className="mobile-actions">
           {demo ? <span className="demo-chip">Demo</span> : null}
