@@ -1586,18 +1586,17 @@ input {
   margin: 0;
   padding: 0;
   display: grid;
-  grid-auto-rows: 10px;
-  gap: 0;
+  row-gap: 10px;
 }
 
 .lesson-card {
   display: block;
-  margin-bottom: 10px;
-  padding: 12px 13px;
+  padding: 10px 12px;
   border-radius: var(--r-md);
   background: color-mix(in srgb, hsl(var(--h) var(--s) 62%) 12%, var(--surface));
   border: 1px solid color-mix(in srgb, hsl(var(--h) var(--s) 55%) 22%, transparent);
   overflow: hidden;
+  min-height: 0;
 }
 
 .lesson-card.is-break {
@@ -1607,7 +1606,7 @@ input {
 
 .lesson-card-time {
   display: block;
-  margin-bottom: 5px;
+  margin-bottom: 4px;
   line-height: 1.2;
   font-variant-numeric: tabular-nums;
   font-size: 0.82rem;
@@ -1631,7 +1630,7 @@ html[data-theme="dark"] .lesson-card-time {
 .lesson-card-subject {
   display: block;
   font-weight: 740;
-  font-size: 1rem;
+  font-size: 0.95rem;
   line-height: 1.2;
   color: var(--on-bg);
   overflow: hidden;
@@ -1647,6 +1646,14 @@ html[data-theme="dark"] .lesson-card-time {
   line-height: 1.25;
   color: var(--on-bg-muted);
   min-width: 0;
+}
+
+.lesson-card.is-short .lesson-card-meta {
+  margin-top: 4px;
+}
+
+.lesson-card.is-short .lesson-card-room {
+  display: none;
 }
 
 .lesson-card-meta > span {

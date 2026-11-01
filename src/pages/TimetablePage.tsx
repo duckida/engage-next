@@ -48,24 +48,27 @@ function minutesFromTime(value: string): number | null {
   return Number(match[1]) * 60 + Number(match[2]);
 }
 
-function lessonGridStyle(lesson: TimetableLesson, dayStartMinutes: number): CSSProperties {
+function lessonGridStyle(lesson: TimetableLesson, timeBoundaries: number[]): CSSProperties {
   const start = minutesFromTime(lesson.start);
   const end = minutesFromTime(lesson.end);
   if (start === null || end === null || end <= start) return {};
 
-  const slotMinutes = 5;
-  const rowStart = Math.max(1, Math.floor((start - dayStartMinutes) / slotMinutes) + 1);
-  const duration = Math.max(slotMinutes, end - start);
-  const rowSpan = Math.max(4, Math.round(duration / slotMinutes));
-  return { gridRow: `${rowStart} / span ${rowSpan}` };
+  const startIndex = timeBoundaries.indexOf(start);
+  const endIndex = timeBoundaries.indexOf(end);
+  if (startIndex < 0 || endIndex <= startIndex) return {};
+
+  return { gridRow: `${startIndex + 1} / ${endIndex + 1}` };
 }
 
-function LessonCard({ lesson, dayStartMinutes }: { lesson: TimetableLesson; dayStartMinutes: number }) {
+function LessonCard({ lesson, timeBoundaries }: { lesson: TimetableLesson; timeBoundaries: number[] }) {
   const isBreak = lesson.kind !== "lesson";
+  const start = minutesFromTime(lesson.start);
+  const end = minutesFromTime(lesson.end);
+  const isShort = start !== null && end !== null && end - start <= 30;
   return (
     <li
-      className={`lesson-card ${isBreak ? "is-break" : ""}`}
-      style={{ ...subjectStyle(lesson.subject), ...lessonGridStyle(lesson, dayStartMinutes) }}
+      className={`lesson-card ${isBreak ? "is-break" : ""} ${isShort ? "is-short" : ""}`}
+      style={{ ...subjectStyle(lesson.subject), ...lessonGridStyle(lesson, timeBoundaries) }}
     >
       <div className="lesson-card-body">
         <time className="lesson-card-time">{timeRange(lesson)}</time>
@@ -88,13 +91,15 @@ function DayColumn({
   todayIso,
   selected,
   onSelect,
-  dayStartMinutes,
+  timeBoundaries,
+  rowTemplate,
 }: {
   day: TimetableDay;
   todayIso: string;
   selected: boolean;
   onSelect: () => void;
-  dayStartMinutes: number;
+  timeBoundaries: number[];
+  rowTemplate: string;
 }) {
   const isToday = day.date === todayIso;
   const lessons = day.lessons;
@@ -115,9 +120,9 @@ function DayColumn({
       ) : null}
 
       {lessons.length ? (
-        <ol className="lesson-stack">
+        <ol className="lesson-stack" style={{ gridTemplateRows: rowTemplate }}>
           {lessons.map((lesson) => (
-            <LessonCard key={lesson.id} lesson={lesson} dayStartMinutes={dayStartMinutes} />
+            <LessonCard key={lesson.id} lesson={lesson} timeBoundaries={timeBoundaries} />
           ))}
         </ol>
       ) : !day.note ? (
@@ -142,13 +147,26 @@ export function TimetablePage() {
 
   const data: Timetable | undefined = query.data;
   const visibleDays = useMemo(() => data?.days.filter(isWeekday) ?? [], [data]);
-  const dayStartMinutes = useMemo(() => {
-    const starts = visibleDays
+  const timeBoundaries = useMemo(() => {
+    const boundaries = visibleDays
       .flatMap((day) => day.lessons)
-      .map((lesson) => minutesFromTime(lesson.start))
+      .flatMap((lesson) => [minutesFromTime(lesson.start), minutesFromTime(lesson.end)])
       .filter((value): value is number => value !== null);
-    return starts.length ? Math.min(...starts) : 8 * 60;
+    return Array.from(new Set(boundaries)).sort((a, b) => a - b);
   }, [visibleDays]);
+  const rowTemplate = useMemo(() => {
+    if (timeBoundaries.length < 2) return "";
+    return timeBoundaries
+      .slice(0, -1)
+      .map((start, index) => {
+        const minutes = timeBoundaries[index + 1] - start;
+        // Keep short periods tall enough for time, subject, teacher and room,
+        // while allowing double blocks to become visibly taller by spanning rows.
+        const height = minutes <= 20 ? 72 : Math.max(96, Math.round(minutes * 2.35));
+        return `${height}px`;
+      })
+      .join(" ");
+  }, [timeBoundaries]);
   const isEmptyWeek =
     !!data &&
     visibleDays.every((d) => d.lessons.filter((l) => l.kind === "lesson").length === 0);
@@ -284,7 +302,8 @@ export function TimetablePage() {
                   todayIso={todayIso}
                   selected={selectedDay === index}
                   onSelect={() => setSelectedDay(index)}
-                  dayStartMinutes={dayStartMinutes}
+                  timeBoundaries={timeBoundaries}
+                  rowTemplate={rowTemplate}
                 />
                 </div>
               ))}
