@@ -1,7 +1,13 @@
 import express, { type NextFunction, type Request, type Response } from "express";
 import cookieParser from "cookie-parser";
 import type { Backend } from "./backend.ts";
-import { AuthError, EngageClient, EngageError, SessionExpiredError, type SerializedSession } from "./engage.ts";
+import {
+  AuthError,
+  EngageClient,
+  EngageError,
+  SessionExpiredError,
+  type SerializedSession,
+} from "./engage.ts";
 import { computeDashboard, londonParts, mondayOf } from "./dashboard.ts";
 import { DEMO_NOW, DemoBackend } from "./demo.ts";
 import { clearedCookie, openSession, readCookie, sealSession, sessionCookie } from "./session.ts";
@@ -284,25 +290,7 @@ app.get(
 
     const out: Record<string, unknown> = { week, base: client.base };
     try {
-      const page = await client.getPage("/VLE/WeeklyTimetable.aspx");
-      out.pageStatus = page.status;
-      out.pageUrl = page.url;
-      out.pageBytes = page.text.length;
-
-      const cheerio = await import("cheerio");
-      const $ = cheerio.load(page.text);
-      out.weekLabel = $("[id$='lblWeek']").first().text().trim();
-      const table = $("table[id^='tblTimeTable']").first();
-      out.tablesFound = $("table").length;
-      out.timetableTableFound = table.length > 0;
-      out.rows = table.find("tr").length;
-      out.lessonTextCells = table.find(".ttLessonText").length;
-      out.firstCells = table
-        .find("tr")
-        .slice(0, 4)
-        .map((_, r) => $(r).children("td, th").first().text().replace(/\s+/g, " ").trim())
-        .get();
-      out.snippet = page.text.replace(/\s+/g, " ").slice(0, 400);
+      Object.assign(out, await client.debugTimetable(week));
     } catch (error) {
       out.error = error instanceof Error ? error.message : String(error);
     }

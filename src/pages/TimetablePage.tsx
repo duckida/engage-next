@@ -22,6 +22,15 @@ function mondayOf(date: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
+function mondayOfIso(iso: string): string {
+  return mondayOf(new Date(`${iso}T00:00:00Z`));
+}
+
+function clampDayIndex(days: TimetableDay[], index: number): number {
+  if (!days.length) return 0;
+  return Math.max(0, Math.min(index, days.length - 1));
+}
+
 function LessonCard({ lesson }: { lesson: TimetableLesson }) {
   const isBreak = lesson.kind !== "lesson";
   return (
@@ -126,10 +135,24 @@ export function TimetablePage() {
   const [requestedWeek, setRequestedWeek] = useState<string>(() => mondayOf(new Date()));
   const base = data?.weekBeginning ?? requestedWeek;
 
-  const goToWeek = (iso: string) => {
-    setRequestedWeek(iso);
-    setWeek(iso);
-    setSelectedDay(0);
+  const moveDay = (direction: -1 | 1) => {
+    if (!data?.days.length) {
+      setRequestedWeek(addDays(base, direction * 7));
+      setWeek(addDays(base, direction * 7));
+      setSelectedDay(direction > 0 ? 0 : Number.MAX_SAFE_INTEGER);
+      return;
+    }
+
+    const nextIndex = selectedDay + direction;
+    if (nextIndex >= 0 && nextIndex < data.days.length) {
+      setSelectedDay(nextIndex);
+      return;
+    }
+
+    const nextWeek = addDays(data.weekBeginning, direction * 7);
+    setRequestedWeek(nextWeek);
+    setWeek(nextWeek);
+    setSelectedDay(direction > 0 ? 0 : Number.MAX_SAFE_INTEGER);
   };
 
   // Follow the dashboard clock (fixed in demo mode) so “today” matches the rest of the app.
@@ -141,6 +164,19 @@ export function TimetablePage() {
     const index = data.days.findIndex((day) => day.date === todayIso);
     if (index >= 0) setSelectedDay(index);
   }, [data, week, todayIso]);
+
+  useEffect(() => {
+    if (!data) return;
+    setSelectedDay((index) => clampDayIndex(data.days, index));
+  }, [data]);
+
+  const goToday = () => {
+    const thisWeek = mondayOfIso(todayIso);
+    setRequestedWeek(thisWeek);
+    setWeek(null);
+    const index = data?.weekBeginning === thisWeek ? data.days.findIndex((day) => day.date === todayIso) : -1;
+    setSelectedDay(index >= 0 ? index : 0);
+  };
 
   return (
     <div className="page">
@@ -154,29 +190,25 @@ export function TimetablePage() {
           <button
             type="button"
             className="icon-btn"
-            aria-label="Previous week"
-            onClick={() => goToWeek(addDays(base, -7))}
+            aria-label="Previous day"
+            title="Previous day"
+            onClick={() => moveDay(-1)}
           >
             <ChevronLeft size={18} />
           </button>
           <button
             type="button"
             className="btn btn-tonal btn-sm"
-            onClick={() => {
-              const thisWeek = mondayOf(new Date());
-              setRequestedWeek(thisWeek);
-              setWeek(null);
-              setSelectedDay(0);
-              void query.refetch();
-            }}
+            onClick={goToday}
           >
-            This week
+            Today
           </button>
           <button
             type="button"
             className="icon-btn"
-            aria-label="Next week"
-            onClick={() => goToWeek(addDays(base, 7))}
+            aria-label="Next day"
+            title="Next day"
+            onClick={() => moveDay(1)}
           >
             <ChevronRight size={18} />
           </button>
@@ -196,19 +228,6 @@ export function TimetablePage() {
         </div>
       ) : query.error ? (
         <ErrorState error={query.error} onRetry={() => void query.refetch()} />
-      ) : data && data.days.length && isEmptyWeek ? (
-        <div className="holiday-card">
-          <span className="holiday-icon">
-            <CalendarDays size={26} strokeWidth={1.7} />
-          </span>
-          <div>
-            <h2>{holidayNote || "No lessons this week"}</h2>
-            <p>
-              Week beginning {formatLongDate(data.weekBeginning)} has no lessons scheduled. Use the
-              arrows above to look at another week.
-            </p>
-          </div>
-        </div>
       ) : data && data.days.length ? (
         <>
           <div className="day-tabs" role="tablist" aria-label="Days">
@@ -229,18 +248,33 @@ export function TimetablePage() {
             ))}
           </div>
 
-          <div className="day-grid">
-            {data.days.map((day, index) => (
-              <div key={day.date} className={`day-slot ${selectedDay === index ? "is-open" : ""}`}>
-                <DayColumn
-                  day={day}
-                  todayIso={todayIso}
-                  selected={selectedDay === index}
-                  onSelect={() => setSelectedDay(index)}
-                />
+          {isEmptyWeek ? (
+            <div className="holiday-card">
+              <span className="holiday-icon">
+                <CalendarDays size={26} strokeWidth={1.7} />
+              </span>
+              <div>
+                <h2>{holidayNote || "No lessons this week"}</h2>
+                <p>
+                  Week beginning {formatLongDate(data.weekBeginning)} has no lessons scheduled. Use
+                  the day arrows or pick a date above to move around.
+                </p>
               </div>
-            ))}
-          </div>
+            </div>
+          ) : (
+            <div className="day-grid">
+              {data.days.map((day, index) => (
+                <div key={day.date} className={`day-slot ${selectedDay === index ? "is-open" : ""}`}>
+                  <DayColumn
+                    day={day}
+                    todayIso={todayIso}
+                    selected={selectedDay === index}
+                    onSelect={() => setSelectedDay(index)}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
         </>
       ) : (
         <EmptyState

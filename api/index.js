@@ -212,6 +212,19 @@ function parseTimetable(html) {
   }
   return { weekBeginning, days };
 }
+function inspectTimetablePage(html) {
+  const $ = cheerio.load(html);
+  const table = $("table[id^='tblTimeTable']").first();
+  return {
+    weekLabel: $("[id$='lblWeek']").first().text().trim(),
+    tablesFound: $("table").length,
+    timetableTableFound: table.length > 0,
+    rows: table.find("tr").length,
+    lessonTextCells: table.find(".ttLessonText").length,
+    firstCells: table.find("tr").slice(0, 4).map((_, r) => $(r).children("td, th").first().text().replace(/\s+/g, " ").trim()).get(),
+    snippet: html.replace(/\s+/g, " ").slice(0, 400)
+  };
+}
 function matchDay(text) {
   const lower = text.toLowerCase();
   for (const day of DAYS) {
@@ -459,6 +472,34 @@ var EngageClient = class _EngageClient {
     const res = await this.request(path, { method: "POST", form: fields, referer: `${this.base}${path}` });
     if (this.looksLikeLogin(res.text, res.url)) throw new SessionExpiredError("Session expired.");
     return parseTimetable(res.text);
+  }
+  async debugTimetable(week) {
+    const path = "/VLE/WeeklyTimetable.aspx";
+    const page = await this.getPage(path);
+    const out = {
+      requestedWeek: week ?? null,
+      initialStatus: page.status,
+      initialUrl: page.url,
+      initialPageBytes: page.text.length,
+      initial: inspectTimetablePage(page.text)
+    };
+    if (!week) return out;
+    try {
+      const timetable = await this.getTimetable(week);
+      out.posted = true;
+      out.returnedWeekBeginning = timetable.weekBeginning;
+      out.days = timetable.days.length;
+      out.lessonItems = timetable.days.flatMap((day) => day.lessons).length;
+      out.lessonItemsByKind = timetable.days.flatMap((day) => day.lessons).reduce((acc, lesson) => {
+        acc[lesson.kind] = (acc[lesson.kind] ?? 0) + 1;
+        return acc;
+      }, {});
+      out.firstDay = timetable.days[0] ?? null;
+    } catch (error) {
+      out.posted = false;
+      out.postError = error instanceof Error ? error.message : String(error);
+    }
+    return out;
   }
   async getReports() {
     const id = await this.getPupilId();
@@ -1474,20 +1515,7 @@ app.get(
     const client = session.backend;
     const out = { week, base: client.base };
     try {
-      const page = await client.getPage("/VLE/WeeklyTimetable.aspx");
-      out.pageStatus = page.status;
-      out.pageUrl = page.url;
-      out.pageBytes = page.text.length;
-      const cheerio2 = await import("cheerio");
-      const $ = cheerio2.load(page.text);
-      out.weekLabel = $("[id$='lblWeek']").first().text().trim();
-      const table = $("table[id^='tblTimeTable']").first();
-      out.tablesFound = $("table").length;
-      out.timetableTableFound = table.length > 0;
-      out.rows = table.find("tr").length;
-      out.lessonTextCells = table.find(".ttLessonText").length;
-      out.firstCells = table.find("tr").slice(0, 4).map((_, r) => $(r).children("td, th").first().text().replace(/\s+/g, " ").trim()).get();
-      out.snippet = page.text.replace(/\s+/g, " ").slice(0, 400);
+      Object.assign(out, await client.debugTimetable(week));
     } catch (error) {
       out.error = error instanceof Error ? error.message : String(error);
     }

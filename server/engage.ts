@@ -300,6 +300,24 @@ export function parseTimetable(html: string): Timetable {
   return { weekBeginning, days };
 }
 
+export function inspectTimetablePage(html: string) {
+  const $ = cheerio.load(html);
+  const table = $("table[id^='tblTimeTable']").first();
+  return {
+    weekLabel: $("[id$='lblWeek']").first().text().trim(),
+    tablesFound: $("table").length,
+    timetableTableFound: table.length > 0,
+    rows: table.find("tr").length,
+    lessonTextCells: table.find(".ttLessonText").length,
+    firstCells: table
+      .find("tr")
+      .slice(0, 4)
+      .map((_, r) => $(r).children("td, th").first().text().replace(/\s+/g, " ").trim())
+      .get(),
+    snippet: html.replace(/\s+/g, " ").slice(0, 400),
+  };
+}
+
 /** "Monday", "Monday 3 November", "MONDAY" -> canonical day name. */
 function matchDay(text: string): string | null {
   const lower = text.toLowerCase();
@@ -626,6 +644,40 @@ export class EngageClient {
     const res = await this.request(path, { method: "POST", form: fields, referer: `${this.base}${path}` });
     if (this.looksLikeLogin(res.text, res.url)) throw new SessionExpiredError("Session expired.");
     return parseTimetable(res.text);
+  }
+
+  async debugTimetable(week?: string) {
+    const path = "/VLE/WeeklyTimetable.aspx";
+    const page = await this.getPage(path);
+    const out: Record<string, unknown> = {
+      requestedWeek: week ?? null,
+      initialStatus: page.status,
+      initialUrl: page.url,
+      initialPageBytes: page.text.length,
+      initial: inspectTimetablePage(page.text),
+    };
+
+    if (!week) return out;
+
+    try {
+      const timetable = await this.getTimetable(week);
+      out.posted = true;
+      out.returnedWeekBeginning = timetable.weekBeginning;
+      out.days = timetable.days.length;
+      out.lessonItems = timetable.days.flatMap((day) => day.lessons).length;
+      out.lessonItemsByKind = timetable.days
+        .flatMap((day) => day.lessons)
+        .reduce<Record<string, number>>((acc, lesson) => {
+          acc[lesson.kind] = (acc[lesson.kind] ?? 0) + 1;
+          return acc;
+        }, {});
+      out.firstDay = timetable.days[0] ?? null;
+    } catch (error) {
+      out.posted = false;
+      out.postError = error instanceof Error ? error.message : String(error);
+    }
+
+    return out;
   }
 
   async getReports(): Promise<Report[]> {
