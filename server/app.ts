@@ -351,33 +351,6 @@ app.get(
 );
 
 app.get(
-  "/api/notices",
-  asyncHandler(async (req, res) => {
-    const session = req.session!;
-    const data = await withRetry(session, () =>
-      cached(session, "notices", 60_000, () => session.backend.getNotices()),
-    );
-    res.json(data);
-  }),
-);
-
-app.get(
-  "/api/notices/:id",
-  asyncHandler(async (req, res) => {
-    const session = req.session!;
-    const id = String(req.params.id);
-    if (!/^[a-z0-9-]{1,40}$/i.test(id)) {
-      res.status(400).json({ error: { code: "bad_request", message: "Invalid notice id." } });
-      return;
-    }
-    const data = await withRetry(session, () =>
-      cached(session, `notice:${id}`, 10 * 60_000, () => session.backend.getNotice(id)),
-    );
-    res.json(data);
-  }),
-);
-
-app.get(
   "/api/siblings",
   asyncHandler(async (req, res) => {
     const session = req.session!;

@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { LogOut, ExternalLink, Monitor, Moon, Sun, ShieldCheck, Users, GraduationCap } from "lucide-react";
 import { api } from "../lib/api";
 import { useMe } from "../lib/useMe";
+import { remembered } from "../lib/remember";
 import { useTheme, type ThemeMode } from "../lib/theme";
 import { ErrorState, PageSkeleton, EmptyState, Skeleton } from "../components/States";
 import { Avatar } from "../components/Avatar";
@@ -40,6 +41,7 @@ export function ProfilePage() {
     try {
       await api.logout();
     } finally {
+      remembered.clearPassword();
       window.location.assign("/");
       window.location.reload();
     }
@@ -49,7 +51,6 @@ export function ProfilePage() {
     <div className="page">
       <header className="page-head">
         <div>
-          <p className="eyebrow">Account</p>
           <h1>Profile</h1>
         </div>
         <button type="button" className="btn btn-outline" onClick={signOut}>
@@ -154,11 +155,6 @@ export function ProfilePage() {
           <p className="card-sub">Sign in with your school to open the official portal.</p>
         )}
       </section>
-
-      <p className="page-footnote">
-        Your password is only ever sent to this local server, which holds a session cookie for as long
-        as you stay signed in.
-      </p>
     </div>
   );
 }

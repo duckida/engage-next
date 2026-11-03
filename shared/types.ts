@@ -63,22 +63,6 @@ export type Report = {
   fileName: string;
 };
 
-export type Notice = {
-  id: string;
-  sender: string;
-  title: string;
-  date: string;
-  photoUrl: string | null;
-};
-
-export type NoticeDetail = {
-  id: string;
-  subject: string;
-  sender: string;
-  date: string;
-  bodyHtml: string;
-};
-
 export type Sibling = {
   name: string;
   photoUrl: string | null;
@@ -94,7 +78,6 @@ export type DashboardPayload = {
   points: PointsSummary;
   recentPoints: PointEntry[];
   reports: number;
-  unread: number;
   weekBeginning: string;
   nowIso: string;
 };

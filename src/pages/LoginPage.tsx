@@ -1,5 +1,5 @@
-import { useState, type FormEvent } from "react";
-import { ArrowLeft, ArrowRight, Eye, EyeOff, Loader2, LockKeyhole, School } from "lucide-react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { ArrowRight, Eye, EyeOff, Loader2, LockKeyhole, School } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "../lib/api";
 import { AppMark } from "../components/AppMark";
@@ -11,8 +11,9 @@ export function LoginPage({ demo = false }: { demo?: boolean }) {
   const [step, setStep] = useState<Step>(() => (remembered.school() ? "account" : "school"));
   const [school, setSchool] = useState(() => remembered.school());
   const [username, setUsername] = useState(() => remembered.username());
-  const [password, setPassword] = useState("");
+  const [password, setPassword] = useState(() => remembered.password());
   const [showPassword, setShowPassword] = useState(false);
+  const autoAttempted = useRef(false);
 
   const login = useMutation({
     mutationFn: (input: { school: string; username: string; password: string }) =>
@@ -21,10 +22,29 @@ export function LoginPage({ demo = false }: { demo?: boolean }) {
       // Only remember details after a successful sign-in.
       remembered.setSchool(input.school);
       remembered.setUsername(input.username);
+      remembered.setPassword(input.password);
       queryClient.setQueryData(["me"], data);
       queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== "me" });
     },
+    onError: (error) => {
+      // A rejected password should not be retried on every visit.
+      if ((error as ApiError).code === "auth_failed") remembered.clearPassword();
+    },
   });
+
+  // Sign straight back in when this device already has saved details. The app
+  // still renders the login screen if that fails, with the form ready to edit.
+  useEffect(() => {
+    if (autoAttempted.current || demo) return;
+    const savedSchool = remembered.school();
+    const savedUsername = remembered.username();
+    const savedPassword = remembered.password();
+    if (!savedSchool || !savedUsername || !savedPassword) return;
+
+    autoAttempted.current = true;
+    login.mutate({ school: savedSchool, username: savedUsername, password: savedPassword });
+    // Runs once on mount; login.mutate is stable enough for this one-shot call.
+  }, [demo]);
 
   function submitSchool(event: FormEvent) {
     event.preventDefault();
@@ -52,23 +72,8 @@ export function LoginPage({ demo = false }: { demo?: boolean }) {
           <AppMark size={48} className="is-on-brand" />
         </div>
         <div className="login-brand-copy">
-          <p className="eyebrow on-primary">Unofficial pupil client</p>
           <h1>Your school day, beautifully simple.</h1>
-          <ul className="login-points">
-            <li>
-              <span>01</span> Today’s timetable and the week ahead
-            </li>
-            <li>
-              <span>02</span> Merits, reports and notices in one place
-            </li>
-            <li>
-              <span>03</span> Works on phones, tablets and laptops
-            </li>
-          </ul>
         </div>
-        <p className="login-footnote">
-          Works with any school on Engage. Not affiliated with your school or with Engage.
-        </p>
       </div>
 
       <div className="login-panel">
@@ -125,10 +130,6 @@ export function LoginPage({ demo = false }: { demo?: boolean }) {
                 <LockKeyhole size={22} strokeWidth={1.8} />
               </div>
               <h2>Welcome back</h2>
-              <p className="login-intro">
-                Sign in with your school Engage account. Your password goes straight from your
-                computer to this local session — it is never stored or shared.
-              </p>
 
               <button type="button" className="login-school-chip" onClick={back}>
                 <School size={14} />
@@ -137,11 +138,6 @@ export function LoginPage({ demo = false }: { demo?: boolean }) {
                 </span>
                 <span className="login-school-change">Change</span>
               </button>
-
-              <p className="login-remember">
-                Your school and username are remembered on this device. Your password is not
-                stored — let your browser’s password manager fill it.
-              </p>
 
               {demo ? (
                 <div className="demo-notice">
@@ -220,7 +216,7 @@ export function LoginPage({ demo = false }: { demo?: boolean }) {
                   setStep("school");
                 }}
               >
-                Forget this school and username
+                Forget this device
               </button>
             </>
           )}

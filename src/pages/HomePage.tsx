@@ -2,7 +2,6 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowRight,
-  Bell,
   CalendarDays,
   ChevronRight,
   FileText,
@@ -155,14 +154,6 @@ export function HomePage() {
           <span className="stat-label">Merits this year</span>
           <span className="stat-delta">{data.points.total > 0 ? `Net +${data.points.total}` : "Net even"}</span>
         </Link>
-        <Link to="/notices" className="stat-card">
-          <span className="stat-icon">
-            <Bell size={18} />
-          </span>
-          <span className="stat-value">{data.unread}</span>
-          <span className="stat-label">Notices</span>
-          <span className="stat-delta">Latest {data.unread ? "unread" : "read"}</span>
-        </Link>
         <Link to="/reports" className="stat-card">
           <span className="stat-icon">
             <FileText size={18} />
@@ -259,10 +250,6 @@ export function HomePage() {
       <Link to="/timetable" className="btn btn-tonal hide-desktop login-mobile-cta">
         See the full timetable <ArrowRight size={16} />
       </Link>
-
-      <p className="week-note">
-        Week beginning {formatShortDate(data.weekBeginning)} · times shown in your local zone
-      </p>
     </div>
   );
 }

@@ -1,8 +1,6 @@
 import { CookieJar } from "tough-cookie";
 import * as cheerio from "cheerio";
 import type {
-  Notice,
-  NoticeDetail,
   PointEntry,
   PointsPayload,
   Report,
@@ -788,47 +786,6 @@ export class EngageClient {
       });
     });
     return siblings;
-  }
-
-  async getNotices(): Promise<Notice[]> {
-    const html: string = await this.asmx("PupilMailService", "GetUnreadMails", {});
-    if (typeof html !== "string" || !html.trim()) return [];
-
-    const $ = cheerio.load(html);
-    const notices: Notice[] = [];
-    $("li a").each((_, el) => {
-      const href = $(el).attr("href") ?? "";
-      const id = href.match(/noticeid=(\d+)/i)?.[1];
-      if (!id) return;
-      const titleEl = $(el).find(".msg-title");
-      const sender = clean(titleEl.find(".blue").text()).replace(/:$/, "");
-      const title = clean(titleEl.clone().find(".blue").remove().end().text());
-      const dateText = clean($(el).find(".msg-time span").text());
-      notices.push({
-        id,
-        sender: sender || "School office",
-        title: title || "Notice",
-        date: isoFromDmy(dateText) ?? "",
-        photoUrl: proxiedPhoto($(el).find("img").attr("src")),
-      });
-    });
-    return notices;
-  }
-
-  async getNotice(id: string): Promise<NoticeDetail> {
-    const data = await this.asmx("PupilMailService", "GetNoticeDetail", {
-      noticeId: id,
-      isforward: false,
-      isreply: false,
-      isreplyall: false,
-    });
-    return {
-      id,
-      subject: String(data?.Subject ?? "Notice"),
-      sender: String(data?.SentByName ?? data?.SentBy ?? "School"),
-      date: String(data?.SentDate ?? "").slice(0, 10),
-      bodyHtml: String(data?.Body ?? ""),
-    };
   }
 
   async getPhoto(pid: string): Promise<{ buffer: Buffer; contentType: string }> {

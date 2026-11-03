@@ -1,6 +1,4 @@
 import type {
-  Notice,
-  NoticeDetail,
   PointEntry,
   PointsPayload,
   PointsSummary,
@@ -375,37 +373,6 @@ const reports: Report[] = [
   },
 ];
 
-const noticeBodies: Record<string, string> = {
-  "demo-n1": `<p>Dear Year 11,</p>
-<p>The mock examination timetable is now available. Mocks begin on <strong>Monday 16 November</strong> and run through <strong>Friday 27 November</strong>.</p>
-<p>Please check the following carefully:</p>
-<ul><li>Exams take place in the Sports Hall unless your teacher tells you otherwise.</li><li>Arrive at least 10 minutes before each session with clear water and black pens.</li><li>If you have two exams in one day, lunch will be provided in the dining hall.</li></ul>
-<p>A printed copy will be given to you during registration. Speak to your form tutor if you have a clash.</p>
-<p>Good luck — you have worked hard for this.</p>
-<p><em>Mrs Pip Brown</em><br>Deputy Head (Academic)</p>`,
-  "demo-n2": `<p>Autumn term reports are now available to view and download in the portal.</p>
-<p>Reports include your attainment grades, effort grades and tutor comment. Please read them with your parents and note any targets set by your teachers.</p>
-<p>If you have a question about a subject comment, speak to that teacher directly.</p>`,
-  "demo-n3": `<p>Our Sixth Form Open Evening takes place on <strong>Tuesday 10 November, 18:00–20:00</strong> in the Caudwell Hall.</p>
-<p>You will be able to meet subject leaders, hear about the application process and tour the Sixth Form centre. Parents and carers are very welcome.</p>
-<p>Please register your interest at reception.</p>`,
-  "demo-n4": `<p>Friday 23 October is a charity non-uniform day. Bring £2 and wear something comfortable — no hoodies, and school shoes still apply.</p>
-<p>All proceeds go to our partner charity, The Food Share.</p>`,
-  "demo-n5": `<p>Congratulations to everyone who received an Eaton Grange merit this half term. Our celebration breakfast will take place on the last Friday of term.</p>
-<p>Keep up the excellent effort.</p>`,
-  "demo-n6": `<p>The Under 16 football fixture against Luckley House will now be played at home on Wednesday 4 November, kick-off 14:30.</p>
-<p>Players should meet at the Sports Hall at 13:45 changed and ready.</p>`,
-};
-
-const notices: Notice[] = [
-  { id: "demo-n1", sender: "Mrs Pip Brown", title: "Year 11 mock examination timetable", date: "2026-10-30", photoUrl: null },
-  { id: "demo-n2", sender: "Mr Daniel Spence", title: "Autumn term reports are now available", date: "2026-10-28", photoUrl: null },
-  { id: "demo-n3", sender: "Mrs Sarah Whitfield", title: "Sixth Form Open Evening – Tuesday 10 November", date: "2026-10-24", photoUrl: null },
-  { id: "demo-n4", sender: "Mr Mark Spalton", title: "Charity non-uniform day", date: "2026-10-20", photoUrl: null },
-  { id: "demo-n5", sender: "Mrs Pip Brown", title: "Eaton Grange merit celebration", date: "2026-10-16", photoUrl: null },
-  { id: "demo-n6", sender: "Mr Charles Gingell", title: "Football fixture change", date: "2026-10-12", photoUrl: null },
-];
-
 const siblings: Sibling[] = [
   {
     name: "Tandon, Siddhan",
@@ -482,21 +449,6 @@ export class DemoBackend implements Backend {
 
   async getReports(): Promise<Report[]> {
     return reports;
-  }
-
-  async getNotices(): Promise<Notice[]> {
-    return notices;
-  }
-
-  async getNotice(id: string): Promise<NoticeDetail> {
-    const notice = notices.find((item) => item.id === id) ?? notices[0];
-    return {
-      id: notice.id,
-      subject: notice.title,
-      sender: notice.sender,
-      date: notice.date,
-      bodyHtml: noticeBodies[id] ?? noticeBodies[notice.id] ?? "<p>Notice</p>",
-    };
   }
 
   async getSiblings(): Promise<Sibling[]> {

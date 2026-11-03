@@ -1,19 +1,34 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Sparkles, TrendingDown, TrendingUp, Search, CalendarRange } from "lucide-react";
+import { Sparkles, Search, CalendarRange } from "lucide-react";
 import { api } from "../lib/api";
 import { ErrorState, PageSkeleton, EmptyState } from "../components/States";
-import { formatLongDate, relativeDate, termRange } from "../lib/format";
+import { formatLongDate, relativeDate, termRange, todayIso } from "../lib/format";
 
 type Filter = "all" | "positive" | "negative";
+type RangeKey = "term" | "year" | "all";
+
+const rangeOptions: Array<{ id: RangeKey; label: string }> = [
+  { id: "term", label: "This term" },
+  { id: "year", label: "This year" },
+  { id: "all", label: "All time" },
+];
 
 export function MeritsPage() {
   const [filter, setFilter] = useState<Filter>("all");
   const [search, setSearch] = useState("");
-  const range = useMemo(() => termRange(), []);
+  const [rangeKey, setRangeKey] = useState<RangeKey>("term");
+
+  const range = useMemo<{ from: string; to: string } | undefined>(() => {
+    if (rangeKey === "all") return undefined;
+    if (rangeKey === "year") {
+      return { from: `${new Date().getFullYear()}-01-01`, to: todayIso() };
+    }
+    return termRange();
+  }, [rangeKey]);
 
   const query = useQuery({
-    queryKey: ["points", range.from, range.to],
+    queryKey: ["points", range?.from ?? "all", range?.to ?? "all"],
     queryFn: () => api.points(range),
   });
 
@@ -32,31 +47,55 @@ export function MeritsPage() {
 
   const positiveCount = entries.filter((entry) => entry.points > 0).length;
   const negativeCount = entries.filter((entry) => entry.points < 0).length;
-  const max = Math.max(1, ...entries.map((entry) => Math.abs(entry.points)));
+
+  // Some portal responses leave the summary dates blank; fall back to the entries.
+  const entryDates = entries.map((entry) => entry.date).filter(Boolean).sort();
+  const rangeFrom = summary.from || entryDates[0] || "";
+  const rangeTo = summary.to || entryDates[entryDates.length - 1] || "";
+  const rangeLabel =
+    rangeFrom && rangeTo
+      ? `${formatLongDate(rangeFrom)} – ${formatLongDate(rangeTo)}`
+      : "All time";
 
   return (
     <div className="page">
       <header className="page-head">
         <div>
           <p className="eyebrow">
-            <CalendarRange size={13} /> {formatLongDate(summary.from)} – {formatLongDate(summary.to)}
+            <CalendarRange size={13} /> {rangeLabel}
           </p>
           <h1>Merits</h1>
         </div>
-        <label className="search-field">
-          <Search size={16} />
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search merits…"
-            aria-label="Search merits"
-          />
-        </label>
+        <div className="merits-head-actions">
+          <label className="range-field">
+            <CalendarRange size={16} />
+            <select
+              value={rangeKey}
+              onChange={(event) => setRangeKey(event.target.value as RangeKey)}
+              aria-label="Time range"
+            >
+              {rangeOptions.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="search-field">
+            <Search size={16} />
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search merits…"
+              aria-label="Search merits"
+            />
+          </label>
+        </div>
       </header>
 
       <section className="summary-hero">
         <div className="summary-total">
-          <span className="summary-label">Net points this term</span>
+          <span className="summary-label">Net points</span>
           <strong className={summary.total >= 0 ? "is-positive" : "is-negative"}>
             {summary.total >= 0 ? `+${summary.total}` : summary.total}
           </strong>
@@ -64,33 +103,6 @@ export function MeritsPage() {
             {positiveCount} merit{positiveCount === 1 ? "" : "s"} · {negativeCount} demerit
             {negativeCount === 1 ? "" : "s"}
           </span>
-        </div>
-
-        <div className="summary-bars">
-          <div className="bar-row">
-            <span className="bar-icon is-positive">
-              <TrendingUp size={15} />
-            </span>
-            <div className="bar-track">
-              <span
-                className="bar-fill is-positive"
-                style={{ width: `${Math.min(100, (summary.positive / Math.max(summary.positive, summary.negative, 1)) * 100)}%` }}
-              />
-            </div>
-            <span className="bar-value">{summary.positive}</span>
-          </div>
-          <div className="bar-row">
-            <span className="bar-icon is-negative">
-              <TrendingDown size={15} />
-            </span>
-            <div className="bar-track">
-              <span
-                className="bar-fill is-negative"
-                style={{ width: `${Math.min(100, (summary.negative / Math.max(summary.positive, summary.negative, 1)) * 100)}%` }}
-              />
-            </div>
-            <span className="bar-value">{summary.negative}</span>
-          </div>
         </div>
       </section>
 
@@ -134,12 +146,6 @@ export function MeritsPage() {
                   <Sparkles size={12} /> {entry.awardedBy || entry.type}
                 </span>
               </div>
-              <div className="ledger-meter" aria-hidden="true">
-                <span
-                  className={entry.points >= 0 ? "is-positive" : "is-negative"}
-                  style={{ width: `${(Math.abs(entry.points) / max) * 100}%` }}
-                />
-              </div>
             </li>
           ))}
         </ul>
@@ -150,7 +156,7 @@ export function MeritsPage() {
           description={
             term
               ? `No merits match “${search.trim()}”.`
-              : "Awards from this term will show up here."
+              : "Awards in this time range will show up here."
           }
         />
       )}

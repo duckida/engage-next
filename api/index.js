@@ -586,44 +586,6 @@ var EngageClient = class _EngageClient {
     });
     return siblings2;
   }
-  async getNotices() {
-    const html = await this.asmx("PupilMailService", "GetUnreadMails", {});
-    if (typeof html !== "string" || !html.trim()) return [];
-    const $ = cheerio.load(html);
-    const notices2 = [];
-    $("li a").each((_, el) => {
-      const href = $(el).attr("href") ?? "";
-      const id = href.match(/noticeid=(\d+)/i)?.[1];
-      if (!id) return;
-      const titleEl = $(el).find(".msg-title");
-      const sender = clean(titleEl.find(".blue").text()).replace(/:$/, "");
-      const title = clean(titleEl.clone().find(".blue").remove().end().text());
-      const dateText = clean($(el).find(".msg-time span").text());
-      notices2.push({
-        id,
-        sender: sender || "School office",
-        title: title || "Notice",
-        date: isoFromDmy(dateText) ?? "",
-        photoUrl: proxiedPhoto($(el).find("img").attr("src"))
-      });
-    });
-    return notices2;
-  }
-  async getNotice(id) {
-    const data = await this.asmx("PupilMailService", "GetNoticeDetail", {
-      noticeId: id,
-      isforward: false,
-      isreply: false,
-      isreplyall: false
-    });
-    return {
-      id,
-      subject: String(data?.Subject ?? "Notice"),
-      sender: String(data?.SentByName ?? data?.SentBy ?? "School"),
-      date: String(data?.SentDate ?? "").slice(0, 10),
-      bodyHtml: String(data?.Body ?? "")
-    };
-  }
   async getPhoto(pid) {
     return this.fetchRaw(`/DBImage.axd?type=pupil&pid=${pid}`);
   }
@@ -766,11 +728,10 @@ async function computeDashboard(backend, now, todayIso) {
   const parts = londonParts(now);
   const date = todayIso ?? parts.date;
   const weekBeginning = mondayOf(date);
-  const [timetable, points, reports2, notices2] = await Promise.all([
+  const [timetable, points, reports2] = await Promise.all([
     backend.getTimetable(weekBeginning),
     backend.getPoints(),
-    backend.getReports(),
-    backend.getNotices()
+    backend.getReports()
   ]);
   const today = timetable.days.find((day) => day.date === date) ?? null;
   const todayLessons = lessonsOnly(today);
@@ -796,7 +757,6 @@ async function computeDashboard(backend, now, todayIso) {
     points: points.summary,
     recentPoints: [...points.entries].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 4),
     reports: reports2.length,
-    unread: notices2.length,
     weekBeginning,
     nowIso: `${date}T${String(parts.hour).padStart(2, "0")}:${String(parts.minute).padStart(2, "0")}`
   };
@@ -1137,35 +1097,6 @@ var reports = [
     fileName: "autumn-term-report.pdf"
   }
 ];
-var noticeBodies = {
-  "demo-n1": `<p>Dear Year 11,</p>
-<p>The mock examination timetable is now available. Mocks begin on <strong>Monday 16 November</strong> and run through <strong>Friday 27 November</strong>.</p>
-<p>Please check the following carefully:</p>
-<ul><li>Exams take place in the Sports Hall unless your teacher tells you otherwise.</li><li>Arrive at least 10 minutes before each session with clear water and black pens.</li><li>If you have two exams in one day, lunch will be provided in the dining hall.</li></ul>
-<p>A printed copy will be given to you during registration. Speak to your form tutor if you have a clash.</p>
-<p>Good luck \u2014 you have worked hard for this.</p>
-<p><em>Mrs Pip Brown</em><br>Deputy Head (Academic)</p>`,
-  "demo-n2": `<p>Autumn term reports are now available to view and download in the portal.</p>
-<p>Reports include your attainment grades, effort grades and tutor comment. Please read them with your parents and note any targets set by your teachers.</p>
-<p>If you have a question about a subject comment, speak to that teacher directly.</p>`,
-  "demo-n3": `<p>Our Sixth Form Open Evening takes place on <strong>Tuesday 10 November, 18:00\u201320:00</strong> in the Caudwell Hall.</p>
-<p>You will be able to meet subject leaders, hear about the application process and tour the Sixth Form centre. Parents and carers are very welcome.</p>
-<p>Please register your interest at reception.</p>`,
-  "demo-n4": `<p>Friday 23 October is a charity non-uniform day. Bring \xA32 and wear something comfortable \u2014 no hoodies, and school shoes still apply.</p>
-<p>All proceeds go to our partner charity, The Food Share.</p>`,
-  "demo-n5": `<p>Congratulations to everyone who received an Eaton Grange merit this half term. Our celebration breakfast will take place on the last Friday of term.</p>
-<p>Keep up the excellent effort.</p>`,
-  "demo-n6": `<p>The Under 16 football fixture against Luckley House will now be played at home on Wednesday 4 November, kick-off 14:30.</p>
-<p>Players should meet at the Sports Hall at 13:45 changed and ready.</p>`
-};
-var notices = [
-  { id: "demo-n1", sender: "Mrs Pip Brown", title: "Year 11 mock examination timetable", date: "2026-10-30", photoUrl: null },
-  { id: "demo-n2", sender: "Mr Daniel Spence", title: "Autumn term reports are now available", date: "2026-10-28", photoUrl: null },
-  { id: "demo-n3", sender: "Mrs Sarah Whitfield", title: "Sixth Form Open Evening \u2013 Tuesday 10 November", date: "2026-10-24", photoUrl: null },
-  { id: "demo-n4", sender: "Mr Mark Spalton", title: "Charity non-uniform day", date: "2026-10-20", photoUrl: null },
-  { id: "demo-n5", sender: "Mrs Pip Brown", title: "Eaton Grange merit celebration", date: "2026-10-16", photoUrl: null },
-  { id: "demo-n6", sender: "Mr Charles Gingell", title: "Football fixture change", date: "2026-10-12", photoUrl: null }
-];
 var siblings = [
   {
     name: "Tandon, Siddhan",
@@ -1247,19 +1178,6 @@ var DemoBackend = class {
   }
   async getReports() {
     return reports;
-  }
-  async getNotices() {
-    return notices;
-  }
-  async getNotice(id) {
-    const notice = notices.find((item) => item.id === id) ?? notices[0];
-    return {
-      id: notice.id,
-      subject: notice.title,
-      sender: notice.sender,
-      date: notice.date,
-      bodyHtml: noticeBodies[id] ?? noticeBodies[notice.id] ?? "<p>Notice</p>"
-    };
   }
   async getSiblings() {
     return siblings;
@@ -1616,33 +1534,6 @@ app.get(
     res.setHeader("Content-Type", file.contentType || "application/pdf");
     res.setHeader("Content-Disposition", `inline; filename="${slug(report.title) || "report"}.pdf"`);
     res.send(file.buffer);
-  })
-);
-app.get(
-  "/api/notices",
-  asyncHandler(async (req, res) => {
-    const session = req.session;
-    const data = await withRetry(
-      session,
-      () => cached(session, "notices", 6e4, () => session.backend.getNotices())
-    );
-    res.json(data);
-  })
-);
-app.get(
-  "/api/notices/:id",
-  asyncHandler(async (req, res) => {
-    const session = req.session;
-    const id = String(req.params.id);
-    if (!/^[a-z0-9-]{1,40}$/i.test(id)) {
-      res.status(400).json({ error: { code: "bad_request", message: "Invalid notice id." } });
-      return;
-    }
-    const data = await withRetry(
-      session,
-      () => cached(session, `notice:${id}`, 10 * 6e4, () => session.backend.getNotice(id))
-    );
-    res.json(data);
   })
 );
 app.get(

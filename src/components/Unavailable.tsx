@@ -29,8 +29,7 @@ export function Unavailable({ error, onRetry }: { error: unknown; onRetry?: () =
             <code>npm install{"\n"}npm run dev</code>
           </pre>
           <p className="unavailable-note">
-            Then open <strong>http://localhost:5173</strong>. Your password is only ever sent to that
-            local server.
+            Then open <strong>http://localhost:5173</strong>.
           </p>
         </div>
 

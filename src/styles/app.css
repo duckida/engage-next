@@ -952,14 +952,6 @@ input {
   margin-top: 6px;
 }
 
-.page-footnote,
-.week-note {
-  font-size: 0.8rem;
-  color: var(--on-bg-faint);
-  text-align: center;
-  padding: 4px 0 12px;
-}
-
 .card {
   background: var(--surface);
   border: 1px solid var(--surface-3);
@@ -1023,6 +1015,42 @@ input {
 
 .search-field input::placeholder {
   color: var(--on-bg-faint);
+}
+
+.merits-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.range-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 46px;
+  padding: 0 14px;
+  border-radius: var(--r-full);
+  background: var(--surface);
+  border: 1px solid var(--outline);
+  color: var(--on-bg-muted);
+  font-size: 0.86rem;
+  font-weight: 640;
+  transition: border-color var(--dur-short) var(--ease), box-shadow var(--dur-short) var(--ease);
+}
+
+.range-field:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--ripple);
+}
+
+.range-field select {
+  border: 0;
+  outline: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
 }
 
 /* ---------- Home ---------- */
@@ -1150,7 +1178,7 @@ input {
 
 .stat-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 14px;
 }
 
@@ -1694,22 +1722,14 @@ html[data-theme="dark"] .lesson-card-time {
 /* ---------- Merits ---------- */
 
 .summary-hero {
-  display: grid;
-  grid-template-columns: 240px 1fr;
-  gap: 26px;
+  display: flex;
   align-items: center;
+  gap: 26px;
   padding: 26px 28px;
   border-radius: var(--r-xl);
   background: var(--surface);
   border: 1px solid var(--surface-3);
   box-shadow: var(--shadow-1);
-}
-
-@media (max-width: 800px) {
-  .summary-hero {
-    grid-template-columns: 1fr;
-    gap: 18px;
-  }
 }
 
 .summary-total {
@@ -1745,68 +1765,6 @@ html[data-theme="dark"] .lesson-card-time {
 .summary-caption {
   font-size: 0.82rem;
   color: var(--on-bg-muted);
-}
-
-.summary-bars {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.bar-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.bar-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: var(--r-full);
-  flex: none;
-}
-
-.bar-icon.is-positive {
-  background: var(--positive-container);
-  color: var(--positive);
-}
-
-.bar-icon.is-negative {
-  background: var(--negative-container);
-  color: var(--negative);
-}
-
-.bar-track {
-  flex: 1;
-  height: 10px;
-  border-radius: var(--r-full);
-  background: var(--surface-2);
-  overflow: hidden;
-}
-
-.bar-fill {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  transition: width 0.7s var(--ease);
-}
-
-.bar-fill.is-positive {
-  background: var(--positive);
-}
-
-.bar-fill.is-negative {
-  background: var(--negative);
-}
-
-.bar-value {
-  min-width: 34px;
-  text-align: right;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
 }
 
 .filter-row {
@@ -1906,29 +1864,6 @@ html[data-theme="dark"] .lesson-card-time {
   color: var(--on-bg-faint);
 }
 
-.ledger-meter {
-  grid-column: 1 / -1;
-  height: 4px;
-  border-radius: var(--r-full);
-  background: var(--surface-2);
-  overflow: hidden;
-}
-
-.ledger-meter span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  transition: width 0.5s var(--ease);
-}
-
-.ledger-meter .is-positive {
-  background: var(--positive);
-}
-
-.ledger-meter .is-negative {
-  background: var(--negative);
-}
-
 /* ---------- Reports ---------- */
 
 .report-groups {
@@ -2006,208 +1941,6 @@ html[data-theme="dark"] .lesson-card-time {
     width: 100%;
     justify-content: flex-end;
   }
-}
-
-/* ---------- Notices ---------- */
-
-.notice-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.notice-row {
-  display: flex;
-  align-items: center;
-  gap: 15px;
-  width: 100%;
-  padding: 15px 18px;
-  border-radius: var(--r-lg);
-  background: var(--surface);
-  border: 1px solid var(--surface-3);
-  text-align: left;
-  transition: box-shadow var(--dur-short) var(--ease), transform var(--dur-short) var(--ease),
-    border-color var(--dur-short) var(--ease);
-}
-
-.notice-row:hover {
-  box-shadow: var(--shadow-2);
-  transform: translateY(-1px);
-}
-
-.notice-row.is-latest {
-  border-color: color-mix(in srgb, var(--primary) 45%, transparent);
-}
-
-.notice-body {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-  flex: 1;
-}
-
-.notice-top {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.notice-top strong {
-  font-weight: 650;
-  font-size: 0.95rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.notice-top time {
-  flex: none;
-  font-size: 0.76rem;
-  color: var(--on-bg-faint);
-}
-
-.notice-sender {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.8rem;
-  color: var(--on-bg-muted);
-}
-
-.notice-cta {
-  flex: none;
-  font-size: 0.78rem;
-  font-weight: 700;
-  color: var(--primary);
-}
-
-/* Bottom-sheet notice reader */
-
-.sheet {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  pointer-events: none;
-  visibility: hidden;
-}
-
-.sheet.is-open {
-  visibility: visible;
-  pointer-events: auto;
-}
-
-.sheet-scrim {
-  position: absolute;
-  inset: 0;
-  background: var(--scrim);
-  opacity: 0;
-  transition: opacity var(--dur-med) var(--ease);
-  width: 100%;
-  cursor: pointer;
-}
-
-.sheet.is-open .sheet-scrim {
-  opacity: 1;
-}
-
-.sheet-panel {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  width: min(720px, 100%);
-  max-height: 86dvh;
-  border-radius: var(--r-xl) var(--r-xl) 0 0;
-  background: var(--surface);
-  box-shadow: var(--shadow-3);
-  transform: translateY(60px);
-  opacity: 0;
-  transition: transform var(--dur-med) var(--ease), opacity var(--dur-med) var(--ease);
-}
-
-.sheet.is-open .sheet-panel {
-  transform: none;
-  opacity: 1;
-}
-
-@media (min-width: 760px) {
-  .sheet {
-    align-items: center;
-  }
-
-  .sheet-panel {
-    border-radius: var(--r-xl);
-  }
-}
-
-.sheet-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 14px 18px;
-  border-bottom: 1px solid var(--surface-3);
-}
-
-.sheet-head > span {
-  font-weight: 700;
-  font-size: 0.92rem;
-}
-
-.sheet-content {
-  padding: 22px 26px 34px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.sheet-content h2 {
-  font-size: 1.35rem;
-  letter-spacing: -0.02em;
-}
-
-.sheet-date {
-  font-size: 0.8rem;
-  color: var(--on-bg-faint);
-}
-
-.prose {
-  color: var(--on-bg-muted);
-  font-size: 0.95rem;
-  line-height: 1.65;
-}
-
-.prose p {
-  margin: 0 0 0.8em;
-}
-
-.prose strong {
-  color: var(--on-bg);
-}
-
-.prose a {
-  color: var(--primary);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-.prose img {
-  max-width: 100%;
-  border-radius: var(--r-md);
-}
-
-.prose ul,
-.prose ol {
-  margin: 0 0 0.8em;
-  padding-left: 1.3em;
 }
 
 /* ---------- Profile ---------- */
@@ -2451,15 +2184,6 @@ html[data-theme="dark"] .lesson-card-time {
   .login-brand {
     min-height: 320px;
   }
-
-  .login-points {
-    display: none;
-  }
-
-  .login-footnote {
-    position: absolute;
-    bottom: 14px;
-  }
 }
 
 .brand-mark {
@@ -2480,38 +2204,6 @@ html[data-theme="dark"] .lesson-card-time {
   letter-spacing: -0.025em;
   line-height: 1.12;
   max-width: 460px;
-}
-
-.login-points {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.login-points li {
-  display: flex;
-  align-items: baseline;
-  gap: 14px;
-  max-width: 420px;
-  color: rgb(255 255 255 / 0.88);
-  font-size: 0.95rem;
-}
-
-.login-points span {
-  font-size: 0.72rem;
-  font-weight: 750;
-  letter-spacing: 0.1em;
-  color: rgb(255 255 255 / 0.5);
-  font-variant-numeric: tabular-nums;
-}
-
-.login-footnote {
-  font-size: 0.76rem;
-  color: rgb(255 255 255 / 0.55);
-  max-width: 440px;
 }
 
 .login-panel {
@@ -2713,13 +2405,6 @@ html[data-theme="dark"] .lesson-card-time {
   font-weight: 700;
   color: var(--primary);
   padding-left: 8px;
-}
-
-.login-remember {
-  font-size: 0.78rem;
-  line-height: 1.5;
-  color: var(--on-bg-faint);
-  margin-top: -4px;
 }
 
 .login-forget {

@@ -9,7 +9,6 @@ import { HomePage } from "./pages/HomePage";
 import { InClassPage } from "./pages/InClassPage";
 import { LoginPage } from "./pages/LoginPage";
 import { MeritsPage } from "./pages/MeritsPage";
-import { NoticesPage } from "./pages/NoticesPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { ReportsPage } from "./pages/ReportsPage";
 import { TimetablePage } from "./pages/TimetablePage";
@@ -48,7 +47,6 @@ export function App() {
         <Route path="/in-class" element={<InClassPage />} />
         <Route path="/merits" element={<MeritsPage />} />
         <Route path="/reports" element={<ReportsPage />} />
-        <Route path="/notices" element={<NoticesPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>

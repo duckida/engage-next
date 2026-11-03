@@ -74,11 +74,10 @@ export async function computeDashboard(
   const date = todayIso ?? parts.date;
   const weekBeginning = mondayOf(date);
 
-  const [timetable, points, reports, notices] = await Promise.all([
+  const [timetable, points, reports] = await Promise.all([
     backend.getTimetable(weekBeginning),
     backend.getPoints(),
     backend.getReports(),
-    backend.getNotices(),
   ]);
 
   const today = timetable.days.find((day) => day.date === date) ?? null;
@@ -109,7 +108,6 @@ export async function computeDashboard(
     points: points.summary,
     recentPoints: [...points.entries].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 4),
     reports: reports.length,
-    unread: notices.length,
     weekBeginning,
     nowIso: `${date}T${String(parts.hour).padStart(2, "0")}:${String(parts.minute).padStart(2, "0")}`,
   };

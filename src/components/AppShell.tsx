@@ -1,7 +1,6 @@
 import { NavLink, Outlet, Link, useLocation, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  Bell,
   CalendarDays,
   ExternalLink,
   FileText,
@@ -19,6 +18,7 @@ import { AppMark } from "./AppMark";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { api } from "../lib/api";
 import { useMe } from "../lib/useMe";
+import { remembered } from "../lib/remember";
 import { useTheme, type ThemeMode } from "../lib/theme";
 
 const navigation = [
@@ -27,7 +27,6 @@ const navigation = [
   { to: "/in-class", label: "In class", icon: Timer },
   { to: "/merits", label: "Merits", icon: Sparkles },
   { to: "/reports", label: "Reports", icon: FileText },
-  { to: "/notices", label: "Notices", icon: Bell },
 ];
 
 const mobileNavigation = navigation;
@@ -107,6 +106,8 @@ export function AppShell() {
     try {
       await api.logout();
     } finally {
+      // Clear the saved password so signing out is not undone by auto sign-in.
+      remembered.clearPassword();
       queryClient.setQueryData(["me"], null);
       queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== "me" });
       navigate("/", { replace: true });

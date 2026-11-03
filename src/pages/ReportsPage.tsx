@@ -31,7 +31,6 @@ export function ReportsPage() {
       <div className="page">
         <header className="page-head">
           <div>
-            <p className="eyebrow">Academic records</p>
             <h1>Reports</h1>
           </div>
         </header>
@@ -48,7 +47,6 @@ export function ReportsPage() {
     <div className="page">
       <header className="page-head">
         <div>
-          <p className="eyebrow">Academic records</p>
           <h1>Reports</h1>
         </div>
         <span className="count-chip">

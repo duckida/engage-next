@@ -8,11 +8,10 @@ It is not affiliated with any school or with Engage.
 
 ## What it shows
 
-- **Home** — today's timetable, the lesson happening now, merits, reports and notice counts
+- **Home** — today's timetable, the lesson happening now, merits and reports
 - **Timetable** — full week, week-by-week navigation, holidays handled
-- **Merits** — net points for the term, filterable ledger with search
+- **Merits** — net points over a chosen time range, filterable ledger with search
 - **Reports** — every report grouped by academic year, open or download the PDF
-- **Notices** — school announcements with a full notice reader
 - **Profile** — linked pupils, appearance, and a link to your official portal
 
 Light, dark and system themes; responsive from phone to desktop.
@@ -33,8 +32,8 @@ followed by your usual portal username and password.
 npm run dev:demo     # fixture data, no school account needed
 ```
 
-Demo mode serves invented timetable, merit, report and notice data so the UI can
-be explored without credentials.
+Demo mode serves invented timetable, merit and report data so the UI can be
+explored without credentials.
 
 ## How it works
 
@@ -42,15 +41,15 @@ be explored without credentials.
 Browser ──/api──▶ local server (127.0.0.1:8787) ──▶ <school>.engagehosted.com
 ```
 
-- Your password is posted once to the local server, which performs the portal's
-  ASP.NET login postback and keeps the resulting cookies in memory.
-- The browser only ever holds an httpOnly `en_sid` session cookie. The password
-  is never written to disk, logged, or sent anywhere except the school's own
-  portal.
-- Sessions live in memory and expire after 12 hours; the server re-authenticates
-  transparently if the portal drops the session mid-use.
-- Timetables and identity come from the portal's HTML; merits, reports, siblings
-  and notices use the portal's own JSON endpoints.
+- Your password is posted to the local server, which performs the portal's
+  ASP.NET login postback and seals the resulting cookies into the session.
+- The browser holds an httpOnly `en_sid` session cookie. The password itself is
+  kept only in this browser's `localStorage`, so the app can sign back in when
+  the session expires. It is never written to a server log or database.
+- Sessions expire after 12 hours; saved details let the app re-authenticate
+  automatically instead of asking again.
+- Timetables and identity come from the portal's HTML; merits, reports and
+  siblings use the portal's own JSON endpoints.
 - Responses are cached briefly per session to avoid hammering the school server.
 
 ## Deploying to Vercel
@@ -91,10 +90,9 @@ session Map. Instead the portal's own cookies are sealed into the visitor's
 - Tampering fails the GCM tag and the session is discarded.
 - Sessions expire after 12 hours, enforced server-side.
 
-The **password is never part of the cookie.** It is used once to log in to the
-school portal, then discarded. When the school's own session expires, you sign
-in again — the app cannot silently re-authenticate, because that would mean
-storing the password.
+The **password is never part of the cookie.** It is used to log in to the school
+portal and is stored separately in this browser's `localStorage`, which is what
+lets the app silently re-authenticate when the session expires.
 
 ## Scripts
 
@@ -121,13 +119,10 @@ storing the password.
 | --- | --- | --- |
 | School address | `localStorage` | So you don't retype it |
 | Username | `localStorage` | So you don't retype it |
+| Password | `localStorage` | Signs you back in when the session expires |
 | Session | httpOnly cookie (encrypted) | Keeps you signed in |
 | Theme | `localStorage` | Light/dark preference |
 
-**Your password is never stored.** It is used once to sign in and then
-discarded. The login form uses `autocomplete="username"` and
-`autocomplete="current-password"`, so your browser's own password manager can
-fill it — that is the safe way to avoid retyping it.
-
-Use *Forget this school and username* on the sign-in screen to clear the
-remembered details on a shared device.
+The password lives only in this browser. Anything that can run JavaScript on
+this origin can read `localStorage`, so use *Forget this device* on the sign-in
+screen — or sign out — to clear the saved details on a shared computer.

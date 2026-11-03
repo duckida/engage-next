@@ -1,6 +1,4 @@
 import type {
-  Notice,
-  NoticeDetail,
   PointsPayload,
   Report,
   SessionUser,
@@ -17,8 +15,6 @@ export interface Backend {
   getTimetable(week?: string): Promise<Timetable>;
   getPoints(from?: string, to?: string): Promise<PointsPayload>;
   getReports(): Promise<Report[]>;
-  getNotices(): Promise<Notice[]>;
-  getNotice(id: string): Promise<NoticeDetail>;
   getSiblings(): Promise<Sibling[]>;
   getPhoto(pid: string): Promise<{ buffer: Buffer; contentType: string }>;
   getReportFile(report: Report): Promise<{ buffer: Buffer; contentType: string }>;

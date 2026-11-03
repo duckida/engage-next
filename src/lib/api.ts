@@ -1,8 +1,6 @@
 import type {
   DashboardPayload,
   MePayload,
-  Notice,
-  NoticeDetail,
   PointsPayload,
   Report,
   Sibling,
@@ -115,7 +113,5 @@ export const api = {
     ),
   reports: () => request<Report[]>("/reports"),
   reportFileUrl: (id: string) => `/api/reports/${encodeURIComponent(id)}/file`,
-  notices: () => request<Notice[]>("/notices"),
-  notice: (id: string) => request<NoticeDetail>(`/notices/${encodeURIComponent(id)}`),
   siblings: () => request<Sibling[]>("/siblings"),
 };
