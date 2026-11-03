@@ -6,6 +6,7 @@ import { Splash } from "./components/States";
 import { Unavailable } from "./components/Unavailable";
 import { useMe } from "./lib/useMe";
 import { HomePage } from "./pages/HomePage";
+import { InClassPage } from "./pages/InClassPage";
 import { LoginPage } from "./pages/LoginPage";
 import { MeritsPage } from "./pages/MeritsPage";
 import { NoticesPage } from "./pages/NoticesPage";
@@ -44,6 +45,7 @@ export function App() {
       <Route element={<AppShell />}>
         <Route path="/" element={<HomePage />} />
         <Route path="/timetable" element={<TimetablePage />} />
+        <Route path="/in-class" element={<InClassPage />} />
         <Route path="/merits" element={<MeritsPage />} />
         <Route path="/reports" element={<ReportsPage />} />
         <Route path="/notices" element={<NoticesPage />} />

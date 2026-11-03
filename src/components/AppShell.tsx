@@ -11,6 +11,7 @@ import {
   Moon,
   Sparkles,
   Sun,
+  Timer,
   UserRound,
 } from "lucide-react";
 import { Avatar } from "./Avatar";
@@ -23,6 +24,7 @@ import { useTheme, type ThemeMode } from "../lib/theme";
 const navigation = [
   { to: "/", label: "Home", icon: Home, end: true },
   { to: "/timetable", label: "Timetable", icon: CalendarDays },
+  { to: "/in-class", label: "In class", icon: Timer },
   { to: "/merits", label: "Merits", icon: Sparkles },
   { to: "/reports", label: "Reports", icon: FileText },
   { to: "/notices", label: "Notices", icon: Bell },
