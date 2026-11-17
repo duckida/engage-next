@@ -6,18 +6,20 @@ import type {
 } from "../shared/types.ts";
 import type { Backend } from "./backend.ts";
 
+const londonFormatter = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Europe/London",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hour12: false,
+  weekday: "short",
+});
+
 export function londonParts(now: Date) {
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Europe/London",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-    weekday: "short",
-  }).formatToParts(now);
+  const parts = londonFormatter.formatToParts(now);
 
   const pick = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
   const hour = Number(pick("hour")) % 24;

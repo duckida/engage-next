@@ -8,6 +8,7 @@ import express from "express";
 import cookieParser from "cookie-parser";
 
 // server/engage.ts
+import { randomUUID } from "node:crypto";
 import { CookieJar } from "tough-cookie";
 import * as cheerio from "cheerio";
 function schoolBaseUrl(school) {
@@ -270,6 +271,10 @@ var EngageClient = class _EngageClient {
   formPage = null;
   pupilId = null;
   credentials;
+  /** Stable across requests because it is carried in the sealed session cookie. */
+  sid = null;
+  /** Learned week-picker postback, carried in the sealed session cookie. */
+  picker = null;
   user = null;
   base;
   constructor(school, credentials) {
@@ -345,6 +350,7 @@ var EngageClient = class _EngageClient {
   }
   async login(username, password) {
     this.credentials = { username, password };
+    this.sid ??= randomUUID();
     const first = await this.request("/Login.aspx?ReturnUrl=%2f");
     const fields = parseFormFields(first.text);
     if (!fields["__VIEWSTATE"]) throw new EngageError("Could not read the portal login form.");
@@ -448,10 +454,12 @@ var EngageClient = class _EngageClient {
   async getTimetable(week) {
     const path = "/VLE/WeeklyTimetable.aspx";
     const page = await this.getPage(path);
-    if (!week) return parseTimetable(page.text);
-    return this.postTimetableWeek(page.text, week, path).then((result) => result.timetable);
+    const current = parseTimetable(page.text);
+    if (!week) return current;
+    if (current.weekBeginning === week.slice(0, 10)) return current;
+    return this.postTimetableWeek(page.text, week, path, current).then((result) => result.timetable);
   }
-  async postTimetableWeek(pageText, week, path = "/VLE/WeeklyTimetable.aspx") {
+  async postTimetableWeek(pageText, week, path = "/VLE/WeeklyTimetable.aspx", known) {
     const targetWeek = week.slice(0, 10);
     const fields = parseFormFields(pageText);
     const pickerNames = Object.keys(fields).filter(
@@ -460,7 +468,10 @@ var EngageClient = class _EngageClient {
     const inputName = findField(fields, (n) => /dpWeekSelectorStartDate.*dateInput$/i.test(n) && !/ClientState/i.test(n)) ?? findField(fields, (n) => /dtPicker.*dateInput$/i.test(n) && !/ClientState/i.test(n)) ?? pickerNames.find((n) => /dateInput$/i.test(n)) ?? pickerNames[0];
     const stateName = findField(fields, (n) => /dpWeekSelectorStartDate.*dateInput_ClientState$/i.test(n)) ?? findField(fields, (n) => /dtPicker.*dateInput_ClientState$/i.test(n)) ?? Object.keys(fields).find((n) => /dateInput_ClientState$/i.test(n));
     if (!inputName) {
-      return { timetable: parseTimetable(pageText), attempts: [] };
+      return {
+        timetable: known ?? parseTimetable(pageText),
+        attempts: []
+      };
     }
     const saturday = addDays(targetWeek, 5);
     const candidates = [
@@ -470,9 +481,14 @@ var EngageClient = class _EngageClient {
       { label: "monday-dmy-picker", iso: targetWeek, text: dateToDmy(targetWeek), target: inputName.replace(/\$dateInput$/i, "") },
       { label: "saturday-dmy-picker", iso: saturday, text: dateToDmy(saturday), target: inputName.replace(/\$dateInput$/i, "") }
     ].filter((candidate, index, all) => all.findIndex((x) => `${x.text}:${x.target}` === `${candidate.text}:${candidate.target}`) === index);
+    const remembered = this.picker?.label;
+    const ordered = remembered ? [
+      ...candidates.filter((candidate) => candidate.label === remembered),
+      ...candidates.filter((candidate) => candidate.label !== remembered)
+    ] : candidates;
     const attempts = [];
     let fallback = null;
-    for (const candidate of candidates) {
+    for (const candidate of ordered) {
       const trial = { ...fields };
       const isoState = `${candidate.iso}-00-00-00`;
       trial[inputName] = candidate.text;
@@ -511,9 +527,12 @@ var EngageClient = class _EngageClient {
         returnedWeek: timetable.weekBeginning
       });
       fallback ??= timetable;
-      if (timetable.weekBeginning === targetWeek) return { timetable, attempts };
+      if (timetable.weekBeginning === targetWeek) {
+        this.picker = { label: candidate.label };
+        return { timetable, attempts };
+      }
     }
-    return { timetable: fallback ?? parseTimetable(pageText), attempts };
+    return { timetable: fallback ?? known ?? parseTimetable(pageText), attempts };
   }
   async debugTimetable(week) {
     const path = "/VLE/WeeklyTimetable.aspx";
@@ -611,9 +630,11 @@ var EngageClient = class _EngageClient {
     return {
       v: 1,
       school: this.base.replace(/^https:\/\//, "").replace(/\.engagehosted\.com$/, ""),
+      sid: this.sid ?? void 0,
       cookies,
       pupilId: this.pupilId,
-      user: this.user
+      user: this.user,
+      picker: this.picker
     };
   }
   /** Rebuild a client from a snapshot produced by exportState(). */
@@ -634,8 +655,10 @@ var EngageClient = class _EngageClient {
       }))
     });
     client.jar = jar;
+    client.sid = state.sid ?? null;
     client.pupilId = state.pupilId ?? null;
     client.user = state.user ?? null;
+    client.picker = state.picker ?? null;
     return client;
   }
   async fetchRaw(path) {
@@ -673,18 +696,19 @@ var EngageClient = class _EngageClient {
 };
 
 // server/dashboard.ts
+var londonFormatter = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Europe/London",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hour12: false,
+  weekday: "short"
+});
 function londonParts(now) {
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Europe/London",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-    weekday: "short"
-  }).formatToParts(now);
+  const parts = londonFormatter.formatToParts(now);
   const pick = (type) => parts.find((p) => p.type === type)?.value ?? "";
   const hour = Number(pick("hour")) % 24;
   const minute = Number(pick("minute"));
@@ -1272,6 +1296,9 @@ function readCookie(header, name = COOKIE_NAME) {
   }
   return void 0;
 }
+function sessionFingerprint(school, username) {
+  return crypto.createHash("sha256").update(`${school}:${username.toLowerCase()}`).digest("hex").slice(0, 16);
+}
 
 // server/app.ts
 var demoMode = process.env.ENGAGE_DEMO === "1";
@@ -1281,6 +1308,30 @@ var demoSession = {
   school: null,
   cache: /* @__PURE__ */ new Map()
 };
+var CACHE_SESSION_LIMIT = 64;
+var sessionCaches = /* @__PURE__ */ new Map();
+function cacheKey(state) {
+  return state.sid ?? sessionFingerprint(state.school, state.user?.name ?? "");
+}
+function cacheFor(state) {
+  const key = cacheKey(state);
+  const now = Date.now();
+  let entry = sessionCaches.get(key);
+  if (!entry) {
+    entry = { cache: /* @__PURE__ */ new Map(), touched: now };
+    sessionCaches.set(key, entry);
+    if (sessionCaches.size > CACHE_SESSION_LIMIT) {
+      const stale = [...sessionCaches.entries()].sort((a, b) => a[1].touched - b[1].touched).slice(0, sessionCaches.size - CACHE_SESSION_LIMIT);
+      for (const [staleKey] of stale) sessionCaches.delete(staleKey);
+    }
+  } else {
+    entry.touched = now;
+  }
+  for (const [entryKey, item] of entry.cache) {
+    if (item.expires <= now) entry.cache.delete(entryKey);
+  }
+  return entry.cache;
+}
 function sessionFor(req) {
   const token = readCookie(req.headers.cookie);
   const state = openSession(token);
@@ -1291,7 +1342,7 @@ function sessionFor(req) {
       demo: false,
       school: state.school,
       state,
-      cache: /* @__PURE__ */ new Map()
+      cache: cacheFor(state)
     };
   }
   return demoMode ? demoSession : void 0;
@@ -1316,6 +1367,44 @@ async function withRetry(session, run) {
     }
     throw error;
   }
+}
+var TIMETABLE_TTL = 5 * 6e4;
+var POINTS_TTL = 6e4;
+var REPORTS_TTL = 5 * 6e4;
+var SIBLINGS_TTL = 10 * 6e4;
+function timetableFor(session, week) {
+  return cached(
+    session,
+    `timetable:${week ?? "current"}`,
+    TIMETABLE_TTL,
+    () => session.backend.getTimetable(week)
+  );
+}
+function pointsFor(session, from, to) {
+  return cached(
+    session,
+    `points:${from ?? "all"}:${to ?? "all"}`,
+    POINTS_TTL,
+    () => session.backend.getPoints(from, to)
+  );
+}
+function reportsFor(session) {
+  return cached(session, "reports", REPORTS_TTL, () => session.backend.getReports());
+}
+function siblingsFor(session) {
+  return cached(session, "siblings", SIBLINGS_TTL, () => session.backend.getSiblings());
+}
+function cachedBackend(session) {
+  const backend = session.backend;
+  return {
+    getUser: () => backend.getUser(),
+    getTimetable: (week) => timetableFor(session, week),
+    getPoints: (from, to) => pointsFor(session, from, to),
+    getReports: () => reportsFor(session),
+    getSiblings: () => siblingsFor(session),
+    getPhoto: (pid) => backend.getPhoto(pid),
+    getReportFile: (report) => backend.getReportFile(report)
+  };
 }
 var asyncHandler = (handler) => (req, res, next) => {
   handler(req, res).catch(next);
@@ -1445,10 +1534,7 @@ app.get(
   asyncHandler(async (req, res) => {
     const session = req.session;
     const now = session.demo ? DEMO_NOW : /* @__PURE__ */ new Date();
-    const data = await withRetry(
-      session,
-      () => cached(session, "dashboard", 3e4, () => computeDashboard(session.backend, now))
-    );
+    const data = await withRetry(session, () => computeDashboard(cachedBackend(session), now));
     res.json(data);
   })
 );
@@ -1459,10 +1545,7 @@ app.get(
     const requested = dateParam(req.query.week);
     const base = session.demo ? DEMO_NOW : /* @__PURE__ */ new Date();
     const week = requested ? mondayOf(requested) : mondayOf(londonParts(base).date);
-    const data = await withRetry(
-      session,
-      () => cached(session, `timetable:${week}`, 5 * 6e4, () => session.backend.getTimetable(week))
-    );
+    const data = await withRetry(session, () => timetableFor(session, week));
     res.json(data);
   })
 );
@@ -1497,15 +1580,7 @@ app.get(
       res.status(400).json({ error: { code: "bad_request", message: "Provide both dates, or neither." } });
       return;
     }
-    const data = await withRetry(
-      session,
-      () => cached(
-        session,
-        `points:${from ?? "all"}:${to ?? "all"}`,
-        6e4,
-        () => session.backend.getPoints(from, to)
-      )
-    );
+    const data = await withRetry(session, () => pointsFor(session, from, to));
     res.json(data);
   })
 );
@@ -1513,10 +1588,7 @@ app.get(
   "/api/reports",
   asyncHandler(async (req, res) => {
     const session = req.session;
-    const data = await withRetry(
-      session,
-      () => cached(session, "reports", 5 * 6e4, () => session.backend.getReports())
-    );
+    const data = await withRetry(session, () => reportsFor(session));
     res.json(data);
   })
 );
@@ -1524,10 +1596,7 @@ app.get(
   "/api/reports/:id/file",
   asyncHandler(async (req, res) => {
     const session = req.session;
-    const reports2 = await withRetry(
-      session,
-      () => cached(session, "reports", 5 * 6e4, () => session.backend.getReports())
-    );
+    const reports2 = await withRetry(session, () => reportsFor(session));
     const report = reports2.find((item) => item.id === req.params.id);
     if (!report) {
       res.status(404).json({ error: { code: "not_found", message: "That report could not be found." } });
@@ -1543,10 +1612,7 @@ app.get(
   "/api/siblings",
   asyncHandler(async (req, res) => {
     const session = req.session;
-    const data = await withRetry(
-      session,
-      () => cached(session, "siblings", 10 * 6e4, () => session.backend.getSiblings())
-    );
+    const data = await withRetry(session, () => siblingsFor(session));
     res.json(data);
   })
 );

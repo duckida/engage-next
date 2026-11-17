@@ -57,14 +57,16 @@ function secondsOfDay(time: string): number {
 }
 
 /** The wall clock in the school's time zone, as seconds since midnight. */
+const londonClock = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Europe/London",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hour12: false,
+});
+
 function londonSeconds(): number {
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Europe/London",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  }).formatToParts(new Date());
+  const parts = londonClock.formatToParts(new Date());
   const pick = (type: string) => Number(parts.find((part) => part.type === type)?.value ?? 0);
   return (pick("hour") % 24) * 3600 + pick("minute") * 60 + pick("second");
 }

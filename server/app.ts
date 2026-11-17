@@ -10,18 +10,26 @@ import {
 } from "./engage.ts";
 import { computeDashboard, londonParts, mondayOf } from "./dashboard.ts";
 import { DEMO_NOW, DemoBackend } from "./demo.ts";
-import { clearedCookie, openSession, readCookie, sealSession, sessionCookie } from "./session.ts";
+import {
+  clearedCookie,
+  openSession,
+  readCookie,
+  sealSession,
+  sessionCookie,
+  sessionFingerprint,
+} from "./session.ts";
 
 export const demoMode = process.env.ENGAGE_DEMO === "1";
 
 type CacheEntry = { expires: number; value: Promise<unknown> };
+type Cache = Map<string, CacheEntry>;
 type Session = {
   backend: Backend;
   demo: boolean;
   school: string | null;
   /** The serialized state to re-seal into the cookie, when the client changes. */
   state?: SerializedSession;
-  cache: Map<string, CacheEntry>;
+  cache: Cache;
 };
 
 type AuthedRequest = Request & { session?: Session };
@@ -32,6 +40,48 @@ const demoSession: Session = {
   school: null,
   cache: new Map(),
 };
+
+const CACHE_SESSION_LIMIT = 64;
+
+/**
+ * Portal work (timetables, merits, reports) is slow enough that the same
+ * answers should survive between requests. Cookies are re-sealed on every
+ * response, so the token itself changes; the session id carried inside it does
+ * not. That gives a long-lived process — local dev, or a warm serverless
+ * instance — a stable key without ever putting the password in the cache.
+ */
+const sessionCaches = new Map<string, { cache: Cache; touched: number }>();
+
+function cacheKey(state: SerializedSession): string {
+  return state.sid ?? sessionFingerprint(state.school, state.user?.name ?? "");
+}
+
+function cacheFor(state: SerializedSession): Cache {
+  const key = cacheKey(state);
+  const now = Date.now();
+  let entry = sessionCaches.get(key);
+
+  if (!entry) {
+    entry = { cache: new Map(), touched: now };
+    sessionCaches.set(key, entry);
+
+    if (sessionCaches.size > CACHE_SESSION_LIMIT) {
+      // Evict the least recently used sessions; they simply re-fetch on demand.
+      const stale = [...sessionCaches.entries()]
+        .sort((a, b) => a[1].touched - b[1].touched)
+        .slice(0, sessionCaches.size - CACHE_SESSION_LIMIT);
+      for (const [staleKey] of stale) sessionCaches.delete(staleKey);
+    }
+  } else {
+    entry.touched = now;
+  }
+
+  // Keep a long-running process from retaining answers that can no longer hit.
+  for (const [entryKey, item] of entry.cache) {
+    if (item.expires <= now) entry.cache.delete(entryKey);
+  }
+  return entry.cache;
+}
 
 /**
  * Rebuild a session from the encrypted cookie. Nothing is kept in memory
@@ -49,7 +99,7 @@ function sessionFor(req: AuthedRequest): Session | undefined {
       demo: false,
       school: state.school,
       state,
-      cache: new Map(),
+      cache: cacheFor(state),
     };
   }
 
@@ -78,6 +128,50 @@ async function withRetry<T>(session: Session, run: () => Promise<T>): Promise<T>
     }
     throw error;
   }
+}
+
+const TIMETABLE_TTL = 5 * 60_000;
+const POINTS_TTL = 60_000;
+const REPORTS_TTL = 5 * 60_000;
+const SIBLINGS_TTL = 10 * 60_000;
+
+/**
+ * One cache entry per real piece of portal data. The dashboard and the pages
+ * that show the same data share these, so opening the timetable after the home
+ * page does not fetch the same week from the school twice.
+ */
+function timetableFor(session: Session, week?: string) {
+  return cached(session, `timetable:${week ?? "current"}`, TIMETABLE_TTL, () =>
+    session.backend.getTimetable(week),
+  );
+}
+
+function pointsFor(session: Session, from?: string, to?: string) {
+  return cached(session, `points:${from ?? "all"}:${to ?? "all"}`, POINTS_TTL, () =>
+    session.backend.getPoints(from, to),
+  );
+}
+
+function reportsFor(session: Session) {
+  return cached(session, "reports", REPORTS_TTL, () => session.backend.getReports());
+}
+
+function siblingsFor(session: Session) {
+  return cached(session, "siblings", SIBLINGS_TTL, () => session.backend.getSiblings());
+}
+
+/** A backend whose slow reads are shared with the other API routes. */
+function cachedBackend(session: Session): Backend {
+  const backend = session.backend;
+  return {
+    getUser: () => backend.getUser(),
+    getTimetable: (week) => timetableFor(session, week),
+    getPoints: (from, to) => pointsFor(session, from, to),
+    getReports: () => reportsFor(session),
+    getSiblings: () => siblingsFor(session),
+    getPhoto: (pid) => backend.getPhoto(pid),
+    getReportFile: (report) => backend.getReportFile(report),
+  };
 }
 
 const asyncHandler =
@@ -248,9 +342,9 @@ app.get(
   asyncHandler(async (req, res) => {
     const session = req.session!;
     const now = session.demo ? DEMO_NOW : new Date();
-    const data = await withRetry(session, () =>
-      cached(session, "dashboard", 30_000, () => computeDashboard(session.backend, now)),
-    );
+    // Compute on every request so "now" and the current lesson stay accurate;
+    // the expensive portal reads underneath are cached and shared.
+    const data = await withRetry(session, () => computeDashboard(cachedBackend(session), now));
     res.json(data);
   }),
 );
@@ -263,9 +357,7 @@ app.get(
     const base = session.demo ? DEMO_NOW : new Date();
     const week = requested ? mondayOf(requested) : mondayOf(londonParts(base).date);
 
-    const data = await withRetry(session, () =>
-      cached(session, `timetable:${week}`, 5 * 60_000, () => session.backend.getTimetable(week)),
-    );
+    const data = await withRetry(session, () => timetableFor(session, week));
     res.json(data);
   }),
 );
@@ -310,11 +402,7 @@ app.get(
       return;
     }
 
-    const data = await withRetry(session, () =>
-      cached(session, `points:${from ?? "all"}:${to ?? "all"}`, 60_000, () =>
-        session.backend.getPoints(from, to),
-      ),
-    );
+    const data = await withRetry(session, () => pointsFor(session, from, to));
     res.json(data);
   }),
 );
@@ -323,9 +411,7 @@ app.get(
   "/api/reports",
   asyncHandler(async (req, res) => {
     const session = req.session!;
-    const data = await withRetry(session, () =>
-      cached(session, "reports", 5 * 60_000, () => session.backend.getReports()),
-    );
+    const data = await withRetry(session, () => reportsFor(session));
     res.json(data);
   }),
 );
@@ -334,9 +420,7 @@ app.get(
   "/api/reports/:id/file",
   asyncHandler(async (req, res) => {
     const session = req.session!;
-    const reports = await withRetry(session, () =>
-      cached(session, "reports", 5 * 60_000, () => session.backend.getReports()),
-    );
+    const reports = await withRetry(session, () => reportsFor(session));
     const report = reports.find((item) => item.id === req.params.id);
     if (!report) {
       res.status(404).json({ error: { code: "not_found", message: "That report could not be found." } });
@@ -354,9 +438,7 @@ app.get(
   "/api/siblings",
   asyncHandler(async (req, res) => {
     const session = req.session!;
-    const data = await withRetry(session, () =>
-      cached(session, "siblings", 10 * 60_000, () => session.backend.getSiblings()),
-    );
+    const data = await withRetry(session, () => siblingsFor(session));
     res.json(data);
   }),
 );

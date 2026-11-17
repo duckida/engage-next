@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { CookieJar } from "tough-cookie";
 import * as cheerio from "cheerio";
 import type {
@@ -389,9 +390,13 @@ export type SerializedCookie = {
 export type SerializedSession = {
   v: 1;
   school: string;
+  /** Stable per-login id, so server-side caches can be keyed without the password. */
+  sid?: string;
   cookies: SerializedCookie[];
   pupilId?: string | null;
   user?: SessionUser | null;
+  /** The week-picker postback that last worked for this portal, so later weeks skip probing. */
+  picker?: { label: string } | null;
 };
 
 export class EngageClient {
@@ -399,6 +404,10 @@ export class EngageClient {
   private formPage: string | null = null;
   private pupilId: string | null = null;
   private credentials?: { username: string; password: string };
+  /** Stable across requests because it is carried in the sealed session cookie. */
+  sid: string | null = null;
+  /** Learned week-picker postback, carried in the sealed session cookie. */
+  picker: { label: string } | null = null;
   user: SessionUser | null = null;
   readonly base: string;
 
@@ -497,6 +506,7 @@ export class EngageClient {
 
   async login(username: string, password: string): Promise<SessionUser> {
     this.credentials = { username, password };
+    this.sid ??= randomUUID();
 
     const first = await this.request("/Login.aspx?ReturnUrl=%2f");
     const fields = parseFormFields(first.text);
@@ -616,12 +626,22 @@ export class EngageClient {
   async getTimetable(week?: string): Promise<Timetable> {
     const path = "/VLE/WeeklyTimetable.aspx";
     const page = await this.getPage(path);
-    if (!week) return parseTimetable(page.text);
+    const current = parseTimetable(page.text);
+    if (!week) return current;
 
-    return this.postTimetableWeek(page.text, week, path).then((result) => result.timetable);
+    // The page already shows one week. When that is the week we want, return it
+    // instead of spending a whole extra postback asking the portal for it.
+    if (current.weekBeginning === week.slice(0, 10)) return current;
+
+    return this.postTimetableWeek(page.text, week, path, current).then((result) => result.timetable);
   }
 
-  private async postTimetableWeek(pageText: string, week: string, path = "/VLE/WeeklyTimetable.aspx") {
+  private async postTimetableWeek(
+    pageText: string,
+    week: string,
+    path = "/VLE/WeeklyTimetable.aspx",
+    known?: Timetable,
+  ) {
     const targetWeek = week.slice(0, 10);
     const fields = parseFormFields(pageText);
 
@@ -643,7 +663,10 @@ export class EngageClient {
       Object.keys(fields).find((n) => /dateInput_ClientState$/i.test(n));
 
     if (!inputName) {
-      return { timetable: parseTimetable(pageText), attempts: [] as TimetablePostAttempt[] };
+      return {
+        timetable: known ?? parseTimetable(pageText),
+        attempts: [] as TimetablePostAttempt[],
+      };
     }
 
     const saturday = addDays(targetWeek, 5);
@@ -655,10 +678,21 @@ export class EngageClient {
       { label: "saturday-dmy-picker", iso: saturday, text: dateToDmy(saturday), target: inputName.replace(/\$dateInput$/i, "") },
     ].filter((candidate, index, all) => all.findIndex((x) => `${x.text}:${x.target}` === `${candidate.text}:${candidate.target}`) === index);
 
+    // If a previous week established which postback this portal accepts, try
+    // that one first. Otherwise every week navigation probes from scratch,
+    // costing a failed round-trip for each wrong guess.
+    const remembered = this.picker?.label;
+    const ordered = remembered
+      ? [
+          ...candidates.filter((candidate) => candidate.label === remembered),
+          ...candidates.filter((candidate) => candidate.label !== remembered),
+        ]
+      : candidates;
+
     const attempts: TimetablePostAttempt[] = [];
     let fallback: Timetable | null = null;
 
-    for (const candidate of candidates) {
+    for (const candidate of ordered) {
       const trial = { ...fields };
       const isoState = `${candidate.iso}-00-00-00`;
       trial[inputName] = candidate.text;
@@ -698,10 +732,13 @@ export class EngageClient {
         returnedWeek: timetable.weekBeginning,
       });
       fallback ??= timetable;
-      if (timetable.weekBeginning === targetWeek) return { timetable, attempts };
+      if (timetable.weekBeginning === targetWeek) {
+        this.picker = { label: candidate.label };
+        return { timetable, attempts };
+      }
     }
 
-    return { timetable: fallback ?? parseTimetable(pageText), attempts };
+    return { timetable: fallback ?? known ?? parseTimetable(pageText), attempts };
   }
 
   async debugTimetable(week?: string) {
@@ -817,9 +854,11 @@ export class EngageClient {
     return {
       v: 1,
       school: this.base.replace(/^https:\/\//, "").replace(/\.engagehosted\.com$/, ""),
+      sid: this.sid ?? undefined,
       cookies,
       pupilId: this.pupilId,
       user: this.user,
+      picker: this.picker,
     };
   }
 
@@ -841,8 +880,10 @@ export class EngageClient {
       })),
     } as never);
     client.jar = jar;
+    client.sid = state.sid ?? null;
     client.pupilId = state.pupilId ?? null;
     client.user = state.user ?? null;
+    client.picker = state.picker ?? null;
     return client;
   }
 

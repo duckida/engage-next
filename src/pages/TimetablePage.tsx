@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
 import { api } from "../lib/api";
+import { useMe } from "../lib/useMe";
 import { ErrorState, PageSkeleton, EmptyState, Skeleton } from "../components/States";
-import { dayNumber, formatLongDate, weekdayShort } from "../lib/format";
+import { dayNumber, formatLongDate, londonTodayIso, weekdayShort } from "../lib/format";
 import { subjectStyle } from "../lib/subjects";
 import type { Timetable, TimetableDay, TimetableLesson } from "@shared/types";
 
@@ -188,8 +189,20 @@ export function TimetablePage() {
   };
 
   // Follow the dashboard clock (fixed in demo mode) so “today” matches the rest of the app.
-  const dashboard = useQuery({ queryKey: ["dashboard"], queryFn: () => api.dashboard(), staleTime: 30_000 });
-  const todayIso = dashboard.data?.nowIso.slice(0, 10) ?? new Date().toISOString().slice(0, 10);
+  // A live portal needs no dashboard call here: the school's own time zone tells
+  // us today, so deep-linking straight to the timetable starts one portal fetch
+  // earlier instead of also loading merits and reports in the background.
+  const me = useMe();
+  const demo = me.data?.demo ?? false;
+  const dashboard = useQuery({
+    queryKey: ["dashboard"],
+    queryFn: () => api.dashboard(),
+    staleTime: 30_000,
+    enabled: demo,
+  });
+  const todayIso = demo
+    ? (dashboard.data?.nowIso.slice(0, 10) ?? londonTodayIso())
+    : londonTodayIso();
 
   useEffect(() => {
     if (!data || week !== null) return;

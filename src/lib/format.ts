@@ -14,6 +14,15 @@ const monthFormatter = new Intl.DateTimeFormat("en-GB", { month: "long", year: "
 
 const monthShortFormatter = new Intl.DateTimeFormat("en-GB", { month: "short" });
 
+const weekdayFormatter = new Intl.DateTimeFormat("en-GB", { weekday: "short" });
+
+const londonDateFormatter = new Intl.DateTimeFormat("en-GB", {
+  timeZone: "Europe/London",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
 function parseIso(iso: string): Date | null {
   if (!iso) return null;
   const date = /^\d{4}-\d{2}-\d{2}$/.test(iso) ? new Date(`${iso}T12:00:00`) : new Date(iso);
@@ -50,7 +59,7 @@ export function dayNumber(iso: string): string {
 }
 
 export function weekdayShort(iso: string): string {
-  return safe(new Intl.DateTimeFormat("en-GB", { weekday: "short" }), iso, "—");
+  return safe(weekdayFormatter, iso, "—");
 }
 
 export function relativeDate(iso: string, todayIso?: string): string {
@@ -112,6 +121,13 @@ export function surnameFirst(name: string): string {
 export function todayIso(): string {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
+/** Today's date in the school's time zone, matching what the server sends. */
+export function londonTodayIso(): string {
+  const parts = londonDateFormatter.formatToParts(new Date());
+  const pick = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
+  return `${pick("year")}-${pick("month")}-${pick("day")}`;
 }
 
 export function termRange(): { from: string; to: string } {
