@@ -195,7 +195,7 @@ export function AppShell() {
       </header>
 
       <main className="main">
-        <div className="page-enter" key={location.pathname}>
+        <div key={location.pathname}>
           <ErrorBoundary onReset={() => navigate(0)}>
             <Outlet />
           </ErrorBoundary>

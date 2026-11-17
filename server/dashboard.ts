@@ -14,6 +14,7 @@ export function londonParts(now: Date) {
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
+    second: "2-digit",
     hour12: false,
     weekday: "short",
   }).formatToParts(now);
@@ -21,12 +22,14 @@ export function londonParts(now: Date) {
   const pick = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
   const hour = Number(pick("hour")) % 24;
   const minute = Number(pick("minute"));
+  const second = Number(pick("second"));
 
   return {
     date: `${pick("year")}-${pick("month")}-${pick("day")}`,
     dayName: pick("weekday"),
     hour,
     minute,
+    second,
     minutes: hour * 60 + minute,
   };
 }
@@ -109,6 +112,6 @@ export async function computeDashboard(
     recentPoints: [...points.entries].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 4),
     reports: reports.length,
     weekBeginning,
-    nowIso: `${date}T${String(parts.hour).padStart(2, "0")}:${String(parts.minute).padStart(2, "0")}`,
+    nowIso: `${date}T${String(parts.hour).padStart(2, "0")}:${String(parts.minute).padStart(2, "0")}:${String(parts.second).padStart(2, "0")}`,
   };
 }

@@ -43,7 +43,7 @@ function clockLabel(time: string): string {
 }
 
 function countdown(seconds: number): string {
-  const safe = Math.max(0, Math.round(seconds));
+  const safe = Math.max(0, Math.ceil(seconds));
   const hours = Math.floor(safe / 3600);
   const minutes = Math.floor((safe % 3600) / 60);
   const rest = String(safe % 60).padStart(2, "0");
@@ -80,9 +80,15 @@ export function InClassPage() {
   const [fullscreen, setFullscreen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
+  // Tick just after each wall-clock second so the countdown stays in step.
   useEffect(() => {
-    const timer = window.setInterval(() => setNow(Date.now()), 1_000);
-    return () => window.clearInterval(timer);
+    let timer = 0;
+    const tick = () => {
+      setNow(Date.now());
+      timer = window.setTimeout(tick, 1_000 - (Date.now() % 1_000) + 5);
+    };
+    timer = window.setTimeout(tick, 1_000 - (Date.now() % 1_000) + 5);
+    return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -91,17 +97,26 @@ export function InClassPage() {
     return () => document.removeEventListener("fullscreenchange", onChange);
   }, []);
 
-  // The server sends school time. When that clock is live we add the seconds
-  // since the response arrived; when it is frozen (demo mode) we do not.
-  const schoolSeconds = useMemo(() => {
+  // Demo mode sends a deliberately frozen school clock. Anchor it once so the
+  // countdown still runs from that moment. A live server is within a minute of
+  // this device, so use the device's London wall clock directly — that way a
+  // refetch can never move the countdown backwards.
+  const fixedClock = useMemo(() => {
     const iso = query.data?.nowIso;
-    if (!iso) return londonSeconds();
-    const base = secondsOfDay(iso.slice(11, 16));
+    if (!iso) return null;
+    const base = secondsOfDay(iso.slice(11, 19));
     const real = londonSeconds();
     const drift = Math.abs(real - base);
-    if (Math.min(drift, 86400 - drift) > 120) return base;
-    return base + Math.max(0, Math.floor((now - query.dataUpdatedAt) / 1000));
-  }, [query.data?.nowIso, query.dataUpdatedAt, now]);
+    const frozen = Math.min(drift, 86400 - drift) > 120;
+    return frozen ? { seconds: base, at: Date.now() } : null;
+  }, [query.data?.nowIso]);
+
+  const schoolSeconds = useMemo(() => {
+    const seconds = fixedClock
+      ? fixedClock.seconds + Math.max(0, now - fixedClock.at) / 1_000
+      : londonSeconds();
+    return ((seconds % 86_400) + 86_400) % 86_400;
+  }, [fixedClock, now]);
 
   const { lesson, phase } = useMemo(
     () => pickLesson(query.data?.today ?? null, schoolSeconds),

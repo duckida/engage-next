@@ -19,7 +19,7 @@ export function Splash() {
 
 export function PageSkeleton({ rows = 4 }: { rows?: number }) {
   return (
-    <div className="page-enter" aria-hidden="true">
+    <div aria-hidden="true">
       <Skeleton className="skeleton-eyebrow" />
       <Skeleton className="skeleton-title" />
       <div className="skeleton-grid">

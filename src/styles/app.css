@@ -21,10 +21,9 @@
   --r-xl: 28px;
   --r-full: 999px;
 
-  /* Motion */
-  --ease: cubic-bezier(0.2, 0, 0, 1);
-  --dur-short: 160ms;
-  --dur-med: 260ms;
+  /* Motion: short colour fades only, no decorative movement. */
+  --ease: ease;
+  --dur-short: 120ms;
 
   /* Elevation (soft) */
   --shadow-1: 0 1px 2px rgb(0 0 0 / 0.05), 0 2px 8px rgb(0 0 0 / 0.05);
@@ -265,27 +264,12 @@ input {
 }
 
 .spin {
-  animation: spin 0.9s linear infinite;
+  animation: spin 1s linear infinite;
 }
 
 @keyframes spin {
   to {
     transform: rotate(360deg);
-  }
-}
-
-.page-enter {
-  animation: pageIn var(--dur-med) var(--ease) both;
-}
-
-@keyframes pageIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
   }
 }
 
@@ -310,14 +294,10 @@ input {
   font-weight: 640;
   font-size: 0.92rem;
   letter-spacing: 0.005em;
-  transition: background var(--dur-short) var(--ease), box-shadow var(--dur-short) var(--ease),
-    transform var(--dur-short) var(--ease), color var(--dur-short) var(--ease);
+  transition: background-color var(--dur-short) var(--ease),
+    color var(--dur-short) var(--ease);
   white-space: nowrap;
   user-select: none;
-}
-
-.btn:active {
-  transform: scale(0.97);
 }
 
 .btn:disabled {
@@ -427,17 +407,6 @@ input {
 .skeleton {
   border-radius: var(--r-sm);
   background: var(--skeleton);
-  animation: shimmer 1.4s ease-in-out infinite;
-}
-
-@keyframes shimmer {
-  0%,
-  100% {
-    opacity: 0.6;
-  }
-  50% {
-    opacity: 1;
-  }
 }
 
 .skeleton-eyebrow {
@@ -489,17 +458,6 @@ input {
   border-radius: var(--r-xl);
   background: var(--surface);
   box-shadow: var(--shadow-2);
-  animation: splashPulse 1.6s var(--ease) infinite;
-}
-
-@keyframes splashPulse {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.06);
-  }
 }
 
 .state-card {
@@ -997,7 +955,7 @@ input {
   background: var(--surface);
   border: 1px solid var(--outline);
   color: var(--on-bg-faint);
-  transition: border-color var(--dur-short) var(--ease), box-shadow var(--dur-short) var(--ease);
+  transition: border-color var(--dur-short) var(--ease);
 }
 
 .search-field:focus-within {
@@ -1036,7 +994,7 @@ input {
   color: var(--on-bg-muted);
   font-size: 0.86rem;
   font-weight: 640;
-  transition: border-color var(--dur-short) var(--ease), box-shadow var(--dur-short) var(--ease);
+  transition: border-color var(--dur-short) var(--ease);
 }
 
 .range-field:focus-within {
@@ -1092,17 +1050,6 @@ input {
   height: 9px;
   border-radius: 50%;
   background: #a5f3c0;
-  box-shadow: 0 0 0 0 rgb(165 243 192 / 0.7);
-  animation: pulse 1.8s var(--ease) infinite;
-}
-
-@keyframes pulse {
-  70% {
-    box-shadow: 0 0 0 9px rgb(165 243 192 / 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgb(165 243 192 / 0);
-  }
 }
 
 .hero-label {
@@ -1173,7 +1120,7 @@ input {
   height: 100%;
   border-radius: inherit;
   background: #fff;
-  transition: width 0.6s var(--ease);
+  transition: width 300ms var(--ease);
 }
 
 .stat-grid {
@@ -1201,11 +1148,10 @@ input {
   border-radius: var(--r-lg);
   background: var(--surface);
   border: 1px solid var(--surface-3);
-  transition: transform var(--dur-short) var(--ease), box-shadow var(--dur-short) var(--ease);
+  transition: box-shadow var(--dur-short) var(--ease);
 }
 
 .stat-card:hover {
-  transform: translateY(-2px);
   box-shadow: var(--shadow-2);
 }
 
@@ -1442,14 +1388,13 @@ input {
   font-weight: 640;
   font-size: 0.92rem;
   color: var(--on-bg-muted);
-  transition: background var(--dur-short) var(--ease), color var(--dur-short) var(--ease),
-    transform var(--dur-short) var(--ease);
+  transition: background-color var(--dur-short) var(--ease),
+    color var(--dur-short) var(--ease);
 }
 
 .quick-card:hover {
   background: var(--surface-3);
   color: var(--on-bg);
-  transform: translateY(-1px);
 }
 
 .quick-card svg:last-child {
@@ -1781,7 +1726,8 @@ html[data-theme="dark"] .lesson-card-time {
   color: var(--on-bg-muted);
   font-size: 0.86rem;
   font-weight: 640;
-  transition: all var(--dur-short) var(--ease);
+  transition: background-color var(--dur-short) var(--ease),
+    border-color var(--dur-short) var(--ease), color var(--dur-short) var(--ease);
 }
 
 .filter-chip:hover {
@@ -1818,12 +1764,11 @@ html[data-theme="dark"] .lesson-card-time {
   border-radius: var(--r-lg);
   background: var(--surface);
   border: 1px solid var(--surface-3);
-  transition: box-shadow var(--dur-short) var(--ease), transform var(--dur-short) var(--ease);
+  transition: box-shadow var(--dur-short) var(--ease);
 }
 
 .ledger-row:hover {
   box-shadow: var(--shadow-1);
-  transform: translateY(-1px);
 }
 
 .ledger-body {
@@ -2002,7 +1947,8 @@ html[data-theme="dark"] .lesson-card-time {
   color: var(--on-bg-muted);
   font-weight: 650;
   font-size: 0.9rem;
-  transition: all var(--dur-short) var(--ease);
+  transition: background-color var(--dur-short) var(--ease),
+    border-color var(--dur-short) var(--ease), color var(--dur-short) var(--ease);
 }
 
 .theme-tile:hover {
@@ -2287,8 +2233,8 @@ html[data-theme="dark"] .lesson-card-time {
   background: var(--surface-2);
   color: var(--on-bg);
   outline: none;
-  transition: border-color var(--dur-short) var(--ease), box-shadow var(--dur-short) var(--ease),
-    background var(--dur-short) var(--ease);
+  transition: border-color var(--dur-short) var(--ease),
+    background-color var(--dur-short) var(--ease);
 }
 
 .input::placeholder {
@@ -2313,8 +2259,8 @@ html[data-theme="dark"] .lesson-card-time {
   border-radius: var(--r-md);
   border: 1px solid var(--outline);
   background: var(--surface-2);
-  transition: border-color var(--dur-short) var(--ease), box-shadow var(--dur-short) var(--ease),
-    background var(--dur-short) var(--ease);
+  transition: border-color var(--dur-short) var(--ease),
+    background-color var(--dur-short) var(--ease);
 }
 
 .input-suffix:focus-within {
@@ -2549,7 +2495,7 @@ html[data-theme="dark"] .lesson-card-time {
   height: 100%;
   border-radius: inherit;
   background: linear-gradient(90deg, #5b4fd6, #7c5cf0);
-  transition: width 0.8s var(--ease);
+  transition: width 1s linear;
 }
 
 .inclass-foot {
