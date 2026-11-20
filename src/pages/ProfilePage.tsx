@@ -1,9 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
-import { LogOut, ExternalLink, Monitor, Moon, Sun, ShieldCheck, Users, GraduationCap } from "lucide-react";
+import { LogOut, ExternalLink, Monitor, Moon, Sun, ShieldCheck, Users, GraduationCap, Timer } from "lucide-react";
 import { api } from "../lib/api";
 import { useMe } from "../lib/useMe";
 import { remembered } from "../lib/remember";
 import { useTheme, type ThemeMode } from "../lib/theme";
+import { useSettings } from "../lib/settings";
 import { ErrorState, PageSkeleton, EmptyState, Skeleton } from "../components/States";
 import { Avatar } from "../components/Avatar";
 import { surnameFirst } from "../lib/format";
@@ -26,6 +27,7 @@ function titleCase(slug: string): string {
 export function ProfilePage() {
   const me = useMe();
   const { mode, setMode } = useTheme();
+  const { endEarly, setEndEarly } = useSettings();
   const school = me.data?.school ?? null;
   const portalUrl = school ? `https://${school}.engagehosted.com/vle/` : null;
   const siblingsQuery = useQuery({
@@ -97,6 +99,34 @@ export function ProfilePage() {
               </button>
             );
           })}
+        </div>
+      </section>
+
+      <section className="card">
+        <header className="card-head">
+          <div>
+            <h2>In class</h2>
+            <p className="card-sub">Tweak what the progress bar shows during lessons</p>
+          </div>
+          <span className="stat-icon">
+            <Timer size={18} />
+          </span>
+        </header>
+        <div className="setting-row">
+          <div className="setting-text">
+            <strong>End classes 5 minutes early</strong>
+            <p className="card-sub">
+              The progress bar counts down to 5 minutes before the real end of the lesson
+            </p>
+          </div>
+          <button
+            type="button"
+            className={`switch ${endEarly ? "is-on" : ""}`}
+            role="switch"
+            aria-checked={endEarly}
+            aria-label="End classes 5 minutes early"
+            onClick={() => setEndEarly(!endEarly)}
+          />
         </div>
       </section>
 

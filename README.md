@@ -122,6 +122,7 @@ lets the app silently re-authenticate when the session expires.
 | Password | `localStorage` | Signs you back in when the session expires |
 | Session | httpOnly cookie (encrypted) | Keeps you signed in |
 | Theme | `localStorage` | Light/dark preference |
+| End classes 5 mins early | `localStorage` | In-class progress bar counts down to the shortened end |
 
 The password lives only in this browser. Anything that can run JavaScript on
 this origin can read `localStorage`, so use *Forget this device* on the sign-in

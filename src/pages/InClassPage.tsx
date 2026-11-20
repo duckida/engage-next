@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CalendarDays, Expand, Minimize } from "lucide-react";
 import { api } from "../lib/api";
+import { useSettings } from "../lib/settings";
 import { ErrorState, PageSkeleton, EmptyState } from "../components/States";
 import { toMinutes } from "../lib/format";
 import type { TimetableDay, TimetableLesson } from "@shared/types";
@@ -80,6 +81,7 @@ export function InClassPage() {
 
   const [now, setNow] = useState(() => Date.now());
   const [fullscreen, setFullscreen] = useState(false);
+  const { endEarly } = useSettings();
   const rootRef = useRef<HTMLDivElement>(null);
 
   // Tick just after each wall-clock second so the countdown stays in step.
@@ -120,7 +122,7 @@ export function InClassPage() {
     return ((seconds % 86_400) + 86_400) % 86_400;
   }, [fixedClock, now]);
 
-  const { lesson, phase } = useMemo(
+  const { lesson, phase: pickedPhase } = useMemo(
     () => pickLesson(query.data?.today ?? null, schoolSeconds),
     [query.data?.today, schoolSeconds],
   );
@@ -150,11 +152,16 @@ export function InClassPage() {
   }
 
   const start = secondsOfDay(lesson.start);
-  const end = secondsOfDay(lesson.end);
+  // The optional "end classes 5 minutes early" setting only affects this
+  // progress-bar view: the bar, countdown and end time all run 5 minutes short.
+  const end = endEarly ? Math.max(start + 1, secondsOfDay(lesson.end) - 5 * 60) : secondsOfDay(lesson.end);
+  const phase: Phase =
+    endEarly && pickedPhase === "running" && schoolSeconds >= end ? "after" : pickedPhase;
   const length = Math.max(1, end - start);
   const percent = Math.min(100, Math.max(0, ((schoolSeconds - start) / length) * 100));
   const clock = phase === "running" ? end - schoolSeconds : phase === "before" ? start - schoolSeconds : 0;
   const label = phase === "running" ? "In class now" : phase === "before" ? "Coming up" : "Finished";
+  const endTime = endEarly ? `${String(Math.floor(end / 3600)).padStart(2, "0")}:${String(Math.floor((end % 3600) / 60)).padStart(2, "0")}` : lesson.end;
 
   return (
     <div className={`inclass ${fullscreen ? "is-fullscreen" : ""}`} ref={rootRef}>
@@ -164,7 +171,7 @@ export function InClassPage() {
           <h2>{lesson.subject}</h2>
           <p className="inclass-sub">
             {lesson.room ? `${lesson.room} · ` : ""}
-            {clockLabel(lesson.start)} – {clockLabel(lesson.end)}
+            {clockLabel(lesson.start)} – {clockLabel(endTime)}
           </p>
         </div>
         <button
